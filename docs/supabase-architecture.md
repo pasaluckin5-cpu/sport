@@ -182,6 +182,42 @@ create table team_messages (
 );
 ```
 
+### Inviting an athlete by email (`invite_athlete_by_email` RPC)
+
+A coach can only `insert` a `team_members` row if they already know the athlete's `uuid` — but
+`profiles_select` only lets a coach read a profile they're *already* linked to, which is
+circular: there's no RLS-visible way to look an athlete up by email before the link exists. The
+fix is one narrow `security definer` RPC that resolves the email and creates the invite in a
+single step, without ever exposing arbitrary profile rows to the client (the caller learns only
+"invited" or an error — never another user's data directly):
+
+```sql
+create or replace function invite_athlete_by_email(target_team uuid, target_email text)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  target_uid uuid;
+begin
+  if not exists (select 1 from teams where id = target_team and coach_id = auth.uid()) then
+    raise exception 'Only the team''s coach can invite athletes';
+  end if;
+
+  select id into target_uid from profiles where email = target_email and role = 'athlete';
+  if target_uid is null then
+    raise exception 'No athlete account found for that email';
+  end if;
+
+  insert into team_members (team_id, athlete_id, status)
+  values (target_team, target_uid, 'pending')
+  on conflict (team_id, athlete_id) do nothing;
+end;
+$$;
+
+grant execute on function invite_athlete_by_email(uuid, text) to authenticated;
+```
+
+Called from the client as `supabase.rpc('invite_athlete_by_email', { target_team, target_email })`.
+
 ### Auto-provisioning a `profiles` row on sign-up
 
 Rather than have the client insert its own `profiles` row after sign-up (which would need an

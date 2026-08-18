@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AthleteCoachPanel } from '@/components/athlete-coach-panel';
 import { Stepper } from '@/components/stepper';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -350,6 +351,7 @@ export default function HomeScreen() {
           ))}
           <HistorySection />
           <ProgressSection profile={profile} />
+          <AthleteCoachPanel />
         </ThemedView>
 
         {Platform.OS === 'web' && <WebBadge />}

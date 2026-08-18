@@ -235,10 +235,61 @@ or level.
 re-derives `weekPlan` with `useMemo` whenever the profile changes — there's no separate
 persisted "plan", so profile and plan can never drift out of sync. `LanguageProvider` and
 `HistoryProvider` (above) are the other two providers, all three wired in `_layout.tsx`.
-**Backup**: since there's no account/cloud sync, `profile.tsx`'s "Backup & restore" section
-copies the saved `AthleteProfile` as JSON to the clipboard (`expo-clipboard`) and restores it
-from pasted text via `src/domain/profileValidation.ts`'s `parseProfileBackup` — a real
-validation boundary (the pasted text is untrusted external input), not a trivial `JSON.parse`.
+**Backup**: independently of the cloud accounts described below, `profile.tsx`'s "Backup &
+restore" section always works — it copies the saved `AthleteProfile` as JSON to the clipboard
+(`expo-clipboard`) and restores it from pasted text via `src/domain/profileValidation.ts`'s
+`parseProfileBackup` — a real validation boundary (the pasted text is untrusted external input),
+not a trivial `JSON.parse`.
+
+**Cloud accounts (optional, Supabase)**: the app is still fully local-first by default — no
+account, no data leaves the device — but Profile → Account can create an optional account
+backed by Supabase (Postgres + Auth), for cross-device sync and a coach/team feature. Full
+schema, entity relationships, and Row Level Security design are in
+`docs/supabase-architecture.md`; the actual SQL (tables, triggers, RLS policies) is
+`supabase/migrations/0001_init.sql`, meant to be run once against a fresh Supabase project via
+its SQL editor. Nothing here is wired to a real project by default: `src/supabase/config.ts`'s
+`isSupabaseConfigured` is `false` (and `supabase` is `null`) unless `EXPO_PUBLIC_SUPABASE_URL`/
+`EXPO_PUBLIC_SUPABASE_ANON_KEY` are set (see `.env.example`) — every data-access function in
+`src/supabase/*.ts` no-ops when unconfigured, so the app never depends on Supabase being present.
+- **Roles**: `athlete` (default on sign-up) / `coach` / `admin`, stored on each user's own
+  `profiles` row. An athlete can never self-promote — the role field is frozen for self-writes
+  by a Postgres trigger (`prevent_role_self_escalation`), not just an RLS check, so there's no
+  code path (this app's or any other client) that can bypass it.
+- **Sync layer**: `src/state/auth-context.tsx` (`AuthProvider`/`useAuth`) tracks the Supabase
+  session. `plan-context.tsx`/`history-context.tsx`/`strokeLog-context.tsx` each gained a
+  same-shaped effect: on sign-in, cloud data wins if it already exists (returning user, new
+  device); otherwise the local `AsyncStorage` data — if any — is uploaded once (`src/supabase/
+  sync.ts`). Signing out changes nothing else — whatever's currently loaded stays in state and
+  in the local cache, so the entire app keeps working exactly as it does with no account at all.
+  This mirroring means every existing local-only user is unaffected; cloud sync is additive, not
+  a replacement path.
+- **Teams are the only coach↔athlete link**: a coach creates a team (`src/components/
+  coach-dashboard.tsx`) and invites an athlete by email — the coach is always the inviter, never
+  the athlete (`invite_athlete_by_email` RPC, since RLS can't let a coach look up an arbitrary
+  athlete's `uuid` by email any other way — see the migration file's comment on that function).
+  The invited athlete accepts/declines from `src/components/athlete-coach-panel.tsx`. A team's
+  coach can then see that athlete's profile/history/stroke-log/results (`is_linked_coach_of` in
+  RLS), author `workouts` for them, and message them both 1:1 (`messages`) and via a team-wide
+  group chat all active members share (`team_messages`).
+- **Coach-authored workouts reuse the plan's own rendering**: `workouts` rows store
+  `pool_warmup`/`pool_main`/`pool_cooldown` (`SetStep[]`) and `gym_blocks` (`GymBlock[]`) as
+  `jsonb` — the same shapes `generateWeekPlan` produces — so `WorkoutCard` in
+  `athlete-coach-panel.tsx` renders them through the exact same `formatSetStep`/`formatGymBlock`
+  formatters the Plan screen uses, instead of a second free-text rendering path. The composer UI
+  (`coach-dashboard.tsx`) is intentionally simpler than the generator itself — one warm-up step,
+  one main-set step, one cool-down step per workout — documented in-app (`coach.workout.
+  scopeNote`) rather than silently limiting without explanation.
+- **What a coach can/can't see, concretely**: linked-coach read access is scoped to profile
+  settings, completion history, stroke log, and results — never another coach's athletes, and
+  never an athlete not on one of the coach's teams (checked live via `is_linked_coach_of`/
+  `is_active_member_of` on every request, not cached). Leaving a team (or never joining one)
+  means no coach can see that athlete's data. This is the exact boundary described in the
+  Privacy Policy.
+- **Deletion**: Profile → Account → "Delete my cloud data" (`deleteCloudData` in
+  `src/supabase/sync.ts`) removes the user's own profile/history/stroke-log/results rows. It
+  does *not* delete the Supabase Auth login itself (email/password) — that needs a service-role
+  operation this pure-client app deliberately doesn't have; the Privacy Policy is explicit that
+  this currently requires contacting the developer.
 **Sharing**: each day's `Collapsible` on the Plan tab has a "Share" action
 (`src/utils/share.ts`'s `shareOrCopy`) that opens the native share sheet on iOS/Android
 (`Share.share` from `react-native`) so an athlete can send a session to a coach or training
@@ -252,10 +303,15 @@ localized and unit-aware.
 - `index.tsx` — "Plan" tab. Empty state with a CTA into onboarding if no profile is saved yet;
   otherwise a week summary plus one `Collapsible` (`src/components/ui/collapsible.tsx`) per day
   showing warmup/main/cooldown sets and/or the gym session for that day, a per-session
-  "mark done" toggle, and a "History" `Collapsible` summarizing completed weeks.
+  "mark done" toggle, a "History" `Collapsible` summarizing completed weeks, a "Progress"
+  `Collapsible` (stroke-count log + records/goals), and — only when signed in —
+  `AthleteCoachPanel` (pending coach invites, and once on a team: coach-authored workouts,
+  results, and both chat threads).
 - `profile.tsx` — "Profile" tab/onboarding form (language, level, goal, units/pool length,
-  session counts/durations, equipment, pace benchmark, backup, and an inline translated privacy
-  policy `Collapsible`). Deliberately mounts its form (`ProfileForm`) only after
+  session counts/durations, equipment, pace benchmark, gender, strokes/distances, backup, an
+  `AccountSection` for optional cloud sign-in/out, `CoachDashboard` when signed in as a coach,
+  and an inline translated privacy policy `Collapsible`). Deliberately mounts its form
+  (`ProfileForm`) only after
   `usePlan().isReady`, so the form's `useState` initializer can seed itself from the loaded
   profile directly — avoiding a `setState`-in-`useEffect` (flagged by `eslint-config-expo`'s
   `react-hooks/set-state-in-effect` rule) to sync it after the fact. The `LanguageProvider` and

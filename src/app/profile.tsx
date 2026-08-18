@@ -6,6 +6,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, TextInput } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChipGroup } from '@/components/chip-group';
+import { CoachDashboard } from '@/components/coach-dashboard';
 import { Stepper } from '@/components/stepper';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -19,8 +20,10 @@ import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, Gender, PoolLeng
 import { unitAbbrev } from '@/i18n/format';
 import { AppLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
 import { useTheme } from '@/hooks/use-theme';
+import { useAuth } from '@/state/auth-context';
 import { useLanguage } from '@/state/language-context';
 import { usePlan } from '@/state/plan-context';
+import { deleteCloudData } from '@/supabase/sync';
 
 const LEVELS: AthleteLevel[] = ['beginner', 'intermediate', 'advanced'];
 const GOALS: TrainingGoal[] = ['fitness', 'endurance', 'speed', 'technique'];
@@ -45,6 +48,127 @@ function FormSection({ label, children }: PropsWithChildren<{ label: string }>) 
   );
 }
 
+function AccountSection() {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const { isConfigured, isReady, session, profile, signIn, signUp, signOut } = useAuth();
+  const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+
+  if (!isConfigured) {
+    return (
+      <FormSection label={t('account.title')}>
+        <ThemedText type="small" themeColor="textSecondary">
+          {t('account.notConfigured')}
+        </ThemedText>
+      </FormSection>
+    );
+  }
+
+  if (!isReady) return null;
+
+  if (session) {
+    async function handleDeleteData() {
+      await deleteCloudData(session!.user.id);
+      setConfirmingDelete(false);
+      setDeleteMessage(t('account.deleteDataDone'));
+    }
+
+    return (
+      <FormSection label={t('account.title')}>
+        <ThemedText type="small">{t('account.signedInAs', { email: session.user.email })}</ThemedText>
+        {profile && <ThemedText type="small" themeColor="textSecondary">{t(`account.role.${profile.role}`)}</ThemedText>}
+        <Pressable onPress={() => signOut()} style={({ pressed }) => pressed && styles.pressed}>
+          <ThemedView type="backgroundElement" style={styles.secondaryButton}>
+            <ThemedText type="smallBold">{t('account.signOut')}</ThemedText>
+          </ThemedView>
+        </Pressable>
+        {!confirmingDelete ? (
+          <Pressable onPress={() => setConfirmingDelete(true)} style={({ pressed }) => pressed && styles.pressed}>
+            <ThemedText type="link">{t('account.deleteData')}</ThemedText>
+          </Pressable>
+        ) : (
+          <>
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('account.deleteDataConfirm')}
+            </ThemedText>
+            <Pressable onPress={handleDeleteData} style={({ pressed }) => pressed && styles.pressed}>
+              <ThemedView type="backgroundElement" style={styles.secondaryButton}>
+                <ThemedText type="smallBold">{t('account.deleteData')}</ThemedText>
+              </ThemedView>
+            </Pressable>
+          </>
+        )}
+        {deleteMessage && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {deleteMessage}
+          </ThemedText>
+        )}
+      </FormSection>
+    );
+  }
+
+  async function handleSubmit() {
+    setBusy(true);
+    setMessage(null);
+    const result = mode === 'signIn' ? await signIn(email, password) : await signUp(email, password);
+    setBusy(false);
+    if (result.error) {
+      setMessage(result.error);
+    } else if (result.needsConfirmation) {
+      setMessage(t('account.needsConfirmation'));
+    } else {
+      setEmail('');
+      setPassword('');
+    }
+  }
+
+  return (
+    <FormSection label={t('account.title')}>
+      <TextInput
+        value={email}
+        onChangeText={setEmail}
+        placeholder={t('account.emailLabel')}
+        placeholderTextColor={theme.textSecondary}
+        autoCapitalize="none"
+        keyboardType="email-address"
+        style={[styles.textInput, { color: theme.text, borderColor: theme.backgroundSelected }]}
+      />
+      <TextInput
+        value={password}
+        onChangeText={setPassword}
+        placeholder={t('account.passwordLabel')}
+        placeholderTextColor={theme.textSecondary}
+        secureTextEntry
+        style={[styles.textInput, { color: theme.text, borderColor: theme.backgroundSelected }]}
+      />
+      <Pressable onPress={handleSubmit} disabled={busy || !email || !password} style={({ pressed }) => pressed && styles.pressed}>
+        <ThemedView type="backgroundSelected" style={styles.secondaryButton}>
+          <ThemedText type="smallBold">{t(mode === 'signIn' ? 'account.signIn' : 'account.signUp')}</ThemedText>
+        </ThemedView>
+      </Pressable>
+      <Pressable
+        onPress={() => {
+          setMode(mode === 'signIn' ? 'signUp' : 'signIn');
+          setMessage(null);
+        }}
+        style={({ pressed }) => pressed && styles.pressed}>
+        <ThemedText type="link">{t(mode === 'signIn' ? 'account.toggleToSignUp' : 'account.toggleToSignIn')}</ThemedText>
+      </Pressable>
+      {message && (
+        <ThemedText type="small" themeColor="textSecondary">
+          {message}
+        </ThemedText>
+      )}
+    </FormSection>
+  );
+}
+
 export default function ProfileScreen() {
   const { t } = useTranslation();
   const { isReady } = usePlan();
@@ -65,6 +189,7 @@ export default function ProfileScreen() {
 function ProfileForm() {
   const { t } = useTranslation();
   const { profile, updateProfile } = usePlan();
+  const { profile: authProfile } = useAuth();
   const { language, setLanguage } = useLanguage();
   const [form, setForm] = useState<AthleteProfile>(profile ?? DEFAULT_PROFILE);
   const [saved, setSaved] = useState(false);
@@ -176,6 +301,9 @@ function ProfileForm() {
         </ThemedView>
 
         <ThemedView style={styles.form}>
+          <AccountSection />
+          {authProfile?.role === 'coach' && <CoachDashboard />}
+
           <FormSection label={t('profile.section.language')}>
             <ChipGroup
               options={SUPPORTED_LANGUAGES.map((code) => ({ value: code, label: t(`language.${code}`) }))}
@@ -516,6 +644,12 @@ const styles = StyleSheet.create({
     minHeight: 72,
     fontSize: 14,
     textAlignVertical: 'top',
+  },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    fontSize: 14,
   },
   pressed: {
     opacity: 0.8,

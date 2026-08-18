@@ -1,6 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { CompletionMap, loadHistory, saveHistory } from '@/storage/history-storage';
+import { bulkUploadCompletions, fetchCloudCompletions, setCloudCompletion } from '@/supabase/sync';
+
+import { useAuth } from './auth-context';
 
 export type SessionKind = 'pool' | 'gym';
 
@@ -25,6 +28,7 @@ const HistoryContext = createContext<HistoryContextValue | null>(null);
 export function HistoryProvider({ children }: { children: ReactNode }) {
   const [history, setHistory] = useState<CompletionMap>({});
   const [isReady, setIsReady] = useState(false);
+  const { session } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +42,27 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Same pattern as PlanProvider: cloud wins if it already has rows (returning user, new
+  // device); otherwise the local history — if any — is uploaded once. See plan-context.tsx for
+  // the fuller rationale; kept identical here so both stay easy to compare.
+  useEffect(() => {
+    if (!session || !isReady) return;
+    let cancelled = false;
+    fetchCloudCompletions(session.user.id).then((cloudHistory) => {
+      if (cancelled) return;
+      if (Object.keys(cloudHistory).length > 0) {
+        setHistory(cloudHistory);
+        saveHistory(cloudHistory);
+      } else if (Object.keys(history).length > 0) {
+        bulkUploadCompletions(session.user.id, history);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user.id, isReady]);
 
   const value = useMemo<HistoryContextValue>(() => {
     const counts = new Map<string, number>();
@@ -56,13 +81,15 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       toggleCompleted: (weekKey, dayIndex, kind) => {
         const key = completionKey(weekKey, dayIndex, kind);
         const next = { ...history };
+        const willBeCompleted = !next[key];
         if (next[key]) delete next[key];
         else next[key] = true;
         setHistory(next);
         saveHistory(next);
+        if (session) setCloudCompletion(session.user.id, weekKey, dayIndex, kind, willBeCompleted);
       },
     };
-  }, [history, isReady]);
+  }, [history, isReady, session]);
 
   return <HistoryContext.Provider value={value}>{children}</HistoryContext.Provider>;
 }

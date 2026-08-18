@@ -31,8 +31,17 @@ standards, with a concrete next-rank goal to chase. The UI is available in Engli
 switchable in the Profile tab.
 
 The app is local-first: your profile is saved on-device and the week's plan is generated from
-it, no account or server required. There's no cloud backup, but you can copy your profile as
-text (Profile → Backup & restore) and paste it back in on a new device.
+it, no account or server required. You can always copy your profile as text (Profile → Backup &
+restore) and paste it back in on a new device.
+
+**Optional cloud accounts & coaching (Supabase).** Profile → Account lets you create an account
+to sync your profile/history/stroke log across devices, and unlocks a coach/team feature: a
+coach creates a team, invites athletes by email, and can then see their profile/history/results,
+assign structured workouts (rendered the same way the generated plan is), and message them
+one-to-one or in a team-wide group chat. This is entirely opt-in — the app works fully offline
+with no account, exactly as above, unless you choose to sign in. See
+`docs/supabase-architecture.md` for the schema/permissions design and `.env.example` for the
+setup needed to point the app at your own Supabase project.
 
 ## Getting started
 
