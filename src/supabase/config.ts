@@ -13,10 +13,25 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
  */
 export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey;
 
+/**
+ * `createClient` eagerly starts a session-recovery read from storage as soon as it's called —
+ * not deferred to a React effect — and expo-router's web build statically pre-renders _layout.tsx
+ * (and therefore this module) once on the server (Node.js), where `window` doesn't exist. Plain
+ * `AsyncStorage`'s web implementation reaches for `window.localStorage` and throws in that
+ * environment, crashing the server render. This wrapper no-ops during that one-time server pass
+ * instead of touching storage; in a real browser or on native, `window` (or the RN environment)
+ * behaves normally and every call passes straight through to `AsyncStorage`.
+ */
+const ssrSafeStorage = {
+  getItem: (key: string) => (typeof window === 'undefined' ? Promise.resolve(null) : AsyncStorage.getItem(key)),
+  setItem: (key: string, value: string) => (typeof window === 'undefined' ? Promise.resolve() : AsyncStorage.setItem(key, value)),
+  removeItem: (key: string) => (typeof window === 'undefined' ? Promise.resolve() : AsyncStorage.removeItem(key)),
+};
+
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl!, supabaseAnonKey!, {
       auth: {
-        storage: AsyncStorage,
+        storage: ssrSafeStorage,
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
