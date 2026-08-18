@@ -1,7 +1,39 @@
 -- Swim Planner — initial Supabase schema, roles, and Row Level Security.
 -- Design rationale lives in docs/supabase-architecture.md — read that first if changing this.
--- Run once via the Supabase SQL editor (or `supabase db push` if using the CLI) against a fresh
+-- Run via the Supabase SQL editor (or `supabase db push` if using the CLI) against a fresh
 -- project, after enabling Email/Password auth and before pointing the app at it.
+--
+-- Safe to re-run from scratch: if a previous attempt failed partway through (e.g. a syntax
+-- error further down), this cleanup section drops everything the script below creates before
+-- recreating it, rather than erroring on "already exists". Only appropriate before the app has
+-- any real users/data — this is an init migration, not a repeatable up-migration.
+
+drop trigger if exists on_auth_user_created on auth.users;
+drop trigger if exists trg_prevent_role_self_escalation on profiles;
+
+drop table if exists team_messages cascade;
+drop table if exists messages cascade;
+drop table if exists results cascade;
+drop table if exists workouts cascade;
+drop table if exists team_members cascade;
+drop table if exists teams cascade;
+drop table if exists stroke_log cascade;
+drop table if exists completions cascade;
+drop table if exists athlete_profiles cascade;
+drop table if exists profiles cascade;
+
+drop function if exists handle_new_user() cascade;
+drop function if exists prevent_role_self_escalation() cascade;
+drop function if exists is_admin() cascade;
+drop function if exists is_coach() cascade;
+drop function if exists is_linked_coach_of(uuid) cascade;
+drop function if exists is_active_member_of(uuid) cascade;
+drop function if exists invite_athlete_by_email(uuid, text) cascade;
+
+drop type if exists user_role cascade;
+drop type if exists gender cascade;
+drop type if exists link_status cascade;
+drop type if exists race_stroke cascade;
 
 -- ============================================================================================
 -- Types
