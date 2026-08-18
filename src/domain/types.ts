@@ -145,6 +145,21 @@ export interface PaceBenchmark {
   timeSec: number;
 }
 
+/**
+ * Only used to compare `benchmark` against gender-specific reference data (world records, ЕВСК
+ * classification standards — see src/domain/standards.ts) — optional, and never required for
+ * plan generation itself.
+ */
+export type Gender = 'male' | 'female';
+
+/** A logged stroke count over a distance (technique-efficiency tracking, e.g. SWOLF-style). */
+export interface StrokeCountEntry {
+  id: string;
+  dateISO: string;
+  distance: number; // in the athlete's unit
+  strokeCount: number;
+}
+
 export interface AthleteProfile {
   level: AthleteLevel;
   goal: TrainingGoal;
@@ -162,6 +177,8 @@ export interface AthleteProfile {
   /** Main race distance(s) trained for, in the athlete's unit (e.g. 100, 200) — biases main-set rep
    *  length and rest toward sprint- or distance-style training. Empty/absent = neutral mid-distance. */
   primaryDistances?: number[];
+  /** Optional — only unlocks the world-record/ЕВСК-rank comparison in the Progress section. */
+  gender?: Gender;
 }
 
 export interface WeekPlan {

@@ -1,7 +1,8 @@
 import type { TFunction } from 'i18next';
 
+import { findWorldRecord, nextRankTarget, rankForTime } from '@/domain/standards';
 import { focusEmphasis, formatPace100, specialtyFactor } from '@/domain/workoutLibrary';
-import { DayPlan, DistanceUnit, GymBlock, GymMode, RaceStroke, SetStep, Zone } from '@/domain/types';
+import { DayPlan, DistanceUnit, Gender, GymBlock, GymMode, PaceBenchmark, RaceStroke, SetStep, Zone } from '@/domain/types';
 
 /** "m"/"yd" — a universal abbreviation, not translated per-language. */
 export function unitAbbrev(unit: DistanceUnit): string {
@@ -76,6 +77,64 @@ export function focusNoteText(
     .join(' · ');
   const emphasis = t(`focus.${focusEmphasis(specialtyFactor(primaryDistances))}`);
   return t('plan.focusNote', { subject, emphasis });
+}
+
+export interface RecordsProgress {
+  yourTime: string;
+  worldRecord?: string;
+  percentOff?: string;
+  currentRank?: string;
+  goal: string;
+}
+
+/**
+ * Compares a freestyle time-trial benchmark against the world record and Russian ЕВСК
+ * classification standards (src/domain/standards.ts) and returns display-ready lines, or a
+ * reason code when there isn't enough profile info yet to compute anything.
+ */
+export function recordsProgressText(
+  gender: Gender | undefined,
+  benchmark: PaceBenchmark | undefined,
+  unit: DistanceUnit,
+  t: TFunction,
+): RecordsProgress | 'needsGender' | 'needsBenchmark' {
+  if (!gender) return 'needsGender';
+  if (!benchmark || benchmark.timeSec <= 0) return 'needsBenchmark';
+
+  const { distance, timeSec } = benchmark;
+  const abbrev = unitAbbrev(unit);
+  const result: RecordsProgress = {
+    yourTime: t('progress.records.yourTime', { distance, unit: abbrev, time: formatPace100(timeSec) }),
+    goal: t('progress.records.noStandard'),
+  };
+
+  const record = findWorldRecord(gender, 'freestyle', distance);
+  if (record) {
+    result.worldRecord = t('progress.records.worldRecord', {
+      context: gender,
+      time: formatPace100(record.timeSec),
+      holder: record.holder,
+      year: record.year,
+    });
+    const percentOff = ((timeSec - record.timeSec) / record.timeSec) * 100;
+    if (percentOff > 0) result.percentOff = t('progress.records.percentOff', { percent: percentOff.toFixed(1) });
+  }
+
+  const current = rankForTime(gender, distance, timeSec);
+  if (current) result.currentRank = t('progress.records.currentRank', { rank: t(`evskRank.${current}`) });
+
+  const next = nextRankTarget(gender, distance, timeSec);
+  if (next) {
+    result.goal = t('progress.records.nextRank', {
+      rank: t(`evskRank.${next.rank}`),
+      time: formatPace100(next.timeSec),
+      diff: next.secondsToImprove.toFixed(1),
+    });
+  } else if (current === 'msmk') {
+    result.goal = t('progress.records.maxRank');
+  }
+
+  return result;
 }
 
 /** Plain-text rendering of a day's session(s), for sharing with a coach or training partner. */

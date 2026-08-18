@@ -8,6 +8,7 @@ import '@/i18n';
 import { HistoryProvider } from '@/state/history-context';
 import { LanguageProvider } from '@/state/language-context';
 import { PlanProvider } from '@/state/plan-context';
+import { StrokeLogProvider } from '@/state/strokeLog-context';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -18,8 +19,10 @@ export default function TabLayout() {
       <LanguageProvider>
         <PlanProvider>
           <HistoryProvider>
-            <AnimatedSplashOverlay />
-            <AppTabs />
+            <StrokeLogProvider>
+              <AnimatedSplashOverlay />
+              <AppTabs />
+            </StrokeLogProvider>
           </HistoryProvider>
         </PlanProvider>
       </LanguageProvider>

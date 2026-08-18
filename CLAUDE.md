@@ -162,6 +162,44 @@ freestyle-only default — both fields are optional and only shown when `poolSes
   stroke-technique cues), not live coaching — it doesn't see or adapt to how a session actually
   felt, and there's no video/technique analysis.
 
+**Progress: stroke-count tracking, world records, and ЕВСК classification goals**: a "Progress"
+section on the Plan screen (below History) gives an athlete two more coach-like feedback loops
+beyond the generated plan itself, both scoped to stay honest about what static reference data
+can and can't tell someone:
+- **Stroke-count log** (`AthleteProfile`-independent — its own `StrokeCountEntry[]`, persisted
+  via `src/storage/strokeLog-storage.ts` / `src/state/strokeLog-context.tsx`): the athlete logs
+  how many strokes a distance took after a session. It's a manual, low-tech version of SWOLF —
+  there's no sensor, so the app can't time the swim itself, only let the athlete log the count
+  and see the average per distance trend over time. Not tied to a specific pool session; just a
+  running log.
+- **Records & goals** (`src/domain/standards.ts`): compares `AthleteProfile.benchmark` (assumed
+  freestyle, same as everywhere else in this app — `PaceBenchmark` has no stroke field) against
+  two curated reference tables, gated on `AthleteProfile.gender` (new, optional, added *only* to
+  unlock this gender-specific comparison — never used by the plan generator itself):
+  - `WORLD_RECORDS`: current long-course-meters individual world records across all five
+    strokes/13 events, men and women — manually curated, not fetched live. Comment in the file
+    flags it as approximate ("current as of early 2026") since records get broken; there's no
+    live-updating source wired up.
+  - `EVSK_FREESTYLE_25M`: Russian ЕВСК (Единая всероссийская спортивная классификация)
+    classification-rank standard times, 2024–2026 cycle, **freestyle only, 25m course** —
+    deliberately scoped to the stroke/distances (100/200/400m) this app's own benchmark and
+    race-distance fields already use, and to what could be directly sourced. МСМК/МС/КМС cells
+    are all directly sourced (swimka.ru); I/II/III разряд cells for 200m (both genders) and
+    400m (women) weren't directly found and are interpolated from the rank-to-rank ratios
+    observed on the fully-sourced distances — flagged in a comment as an approximation, not an
+    official figure, since presenting a fabricated "official" classification time would be
+    actively misleading for something people might use for real certification.
+  - `rankForTime`/`nextRankTarget` turn a benchmark time into "your time already qualifies for
+    X" and "next goal: Y, get under {{time}} ({{diff}}s to find)" — the concrete, adaptive-goal
+    part of the request this feature answers. `src/i18n/format.ts`'s `recordsProgressText`
+    composes these into display-ready lines (or returns `'needsGender' | 'needsBenchmark'` when
+    there isn't enough profile info yet) and always appends a disclaimer line pointing at
+    worldaquatics.com / the federation as the source of truth, not this table.
+  - This is still reference data, read once at build time, not a live feed — same honesty
+    framing as the rest of the app's "how are plans generated" story (see the plan-generation
+    knowledge-base description above): a smarter, better-grounded template, not a coach that
+    watches the athlete swim.
+
 **Weekly variation & history**: nothing about a *profile* changes week to week, but
 `generateWeekPlan`'s week-key rotation (above) means the actual zone order, stroke emphasis,
 and gym-focus order differ across calendar weeks even for an unchanged profile — so the plan

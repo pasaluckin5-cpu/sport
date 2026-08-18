@@ -4,7 +4,7 @@ import { generateWeekPlan } from '@/domain/planGenerator';
 import { AthleteProfile } from '@/domain/types';
 
 import i18n from './index';
-import { focusNoteText, formatDayShareText, formatSetStep } from './format';
+import { focusNoteText, formatDayShareText, formatSetStep, recordsProgressText } from './format';
 
 const PROFILE: AthleteProfile = {
   level: 'intermediate',
@@ -70,6 +70,33 @@ describe('formatSetStep stroke-specific drills', () => {
       .find((s) => s.kind === 'drill')!;
     expect(drillStep).toBeDefined();
     expect(drillStep.stroke).not.toBe('choice');
+  });
+});
+
+describe('recordsProgressText', () => {
+  it('asks for gender first when neither is set', () => {
+    expect(recordsProgressText(undefined, undefined, 'meters', i18n.t)).toBe('needsGender');
+  });
+
+  it('asks for a benchmark once gender is set', () => {
+    expect(recordsProgressText('male', undefined, 'meters', i18n.t)).toBe('needsBenchmark');
+  });
+
+  it('compares a real benchmark against the world record and a classification rank', () => {
+    const result = recordsProgressText('male', { distance: 100, timeSec: 65 }, 'meters', i18n.t);
+    expect(result).not.toBe('needsGender');
+    expect(result).not.toBe('needsBenchmark');
+    const progress = result as Exclude<typeof result, 'needsGender' | 'needsBenchmark'>;
+    expect(progress.yourTime).toContain('100');
+    expect(progress.worldRecord).toBeDefined();
+    expect(progress.percentOff).toBeDefined();
+    expect(progress.goal).toBeTruthy();
+  });
+
+  it('congratulates a time faster than the world record instead of a negative percentOff', () => {
+    const result = recordsProgressText('male', { distance: 100, timeSec: 40 }, 'meters', i18n.t);
+    const progress = result as Exclude<typeof result, 'needsGender' | 'needsBenchmark'>;
+    expect(progress.percentOff).toBeUndefined();
   });
 });
 

@@ -4,13 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Stepper } from '@/components/stepper';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Collapsible } from '@/components/ui/collapsible';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { equipmentLabel } from '@/domain/equipment';
-import { DAY_KEYS, DayPlan, DistanceUnit } from '@/domain/types';
+import { AthleteProfile, DAY_KEYS, DayPlan, DistanceUnit } from '@/domain/types';
 import { basePace100Sec, formatPace100 } from '@/domain/workoutLibrary';
 import {
   focusNoteText,
@@ -18,12 +19,14 @@ import {
   formatGymBlock,
   formatSetStep,
   gymModeLabel,
+  recordsProgressText,
   swimSessionTitle,
   unitAbbrev,
 } from '@/i18n/format';
 import { useTheme } from '@/hooks/use-theme';
 import { SessionKind, useHistory } from '@/state/history-context';
 import { usePlan } from '@/state/plan-context';
+import { useStrokeLog } from '@/state/strokeLog-context';
 import { shareOrCopy } from '@/utils/share';
 
 function CompletionToggle({
@@ -142,6 +145,117 @@ function HistorySection() {
   );
 }
 
+function ProgressSection({ profile }: { profile: AthleteProfile }) {
+  const { t } = useTranslation();
+  const { entries, addEntry, removeEntry, averageForDistance } = useStrokeLog();
+  const [distance, setDistance] = useState<number>(profile.poolLength);
+  const [strokeCount, setStrokeCount] = useState(20);
+  const abbrev = unitAbbrev(profile.unit);
+  const average = averageForDistance(distance);
+  const records = recordsProgressText(profile.gender, profile.benchmark, profile.unit, t);
+
+  return (
+    <Collapsible title={t('progress.title')}>
+      <View style={styles.sessionBlock}>
+        <ThemedText type="smallBold" themeColor="textSecondary">
+          {t('progress.strokeLog.title')}
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {t('progress.strokeLog.hint')}
+        </ThemedText>
+        <View style={styles.progressRow}>
+          <View style={styles.timeField}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('progress.strokeLog.distanceLabel')}
+            </ThemedText>
+            <Stepper
+              value={distance}
+              min={profile.poolLength}
+              max={profile.poolLength * 20}
+              step={profile.poolLength}
+              suffix={abbrev}
+              onChange={setDistance}
+            />
+          </View>
+          <View style={styles.timeField}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('progress.strokeLog.strokesLabel')}
+            </ThemedText>
+            <Stepper value={strokeCount} min={1} max={200} onChange={setStrokeCount} />
+          </View>
+        </View>
+        <Pressable onPress={() => addEntry(distance, strokeCount)} style={({ pressed }) => pressed && styles.pressed}>
+          <ThemedView type="backgroundElement" style={styles.secondaryButton}>
+            <ThemedText type="smallBold">{t('progress.strokeLog.add')}</ThemedText>
+          </ThemedView>
+        </Pressable>
+        {average !== null && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {t('progress.strokeLog.average', { distance, unit: abbrev, avg: average.toFixed(1) })}
+          </ThemedText>
+        )}
+        {entries.length === 0 ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            {t('progress.strokeLog.empty')}
+          </ThemedText>
+        ) : (
+          entries.slice(0, 10).map((entry) => (
+            <View key={entry.id} style={styles.entryRow}>
+              <ThemedText type="small">
+                {t('progress.strokeLog.entry', {
+                  date: entry.dateISO,
+                  distance: entry.distance,
+                  unit: abbrev,
+                  count: entry.strokeCount,
+                })}
+              </ThemedText>
+              <Pressable onPress={() => removeEntry(entry.id)} style={({ pressed }) => pressed && styles.pressed}>
+                <ThemedText type="link">{t('progress.strokeLog.remove')}</ThemedText>
+              </Pressable>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={styles.sessionBlock}>
+        <ThemedText type="smallBold" themeColor="textSecondary">
+          {t('progress.records.title')}
+        </ThemedText>
+        {records === 'needsGender' && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {t('progress.records.needsGender')}
+          </ThemedText>
+        )}
+        {records === 'needsBenchmark' && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {t('progress.records.needsBenchmark')}
+          </ThemedText>
+        )}
+        {typeof records === 'object' && (
+          <>
+            <ThemedText type="small">{records.yourTime}</ThemedText>
+            {records.worldRecord && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {records.worldRecord}
+              </ThemedText>
+            )}
+            {records.percentOff && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {records.percentOff}
+              </ThemedText>
+            )}
+            {records.currentRank && <ThemedText type="small">{records.currentRank}</ThemedText>}
+            <ThemedText type="small">{records.goal}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('progress.records.disclaimer')}
+            </ThemedText>
+          </>
+        )}
+      </View>
+    </Collapsible>
+  );
+}
+
 export default function HomeScreen() {
   const { t } = useTranslation();
   const { profile, weekPlan, isReady } = usePlan();
@@ -235,6 +349,7 @@ export default function HomeScreen() {
             </Fragment>
           ))}
           <HistorySection />
+          <ProgressSection profile={profile} />
         </ThemedView>
 
         {Platform.OS === 'web' && <WebBadge />}
@@ -296,5 +411,22 @@ const styles = StyleSheet.create({
   stepGroup: {
     gap: Spacing.half,
     marginBottom: Spacing.two,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    gap: Spacing.five,
+  },
+  timeField: {
+    gap: Spacing.one,
+  },
+  secondaryButton: {
+    alignItems: 'center',
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.three,
+  },
+  entryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
 });

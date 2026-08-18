@@ -24,8 +24,11 @@ It takes into account:
 
 The plan varies from week to week (zone order, stroke emphasis, and gym focus rotate on a
 weekly cycle) instead of being the exact same week forever, and you can mark sessions done and
-see a history of completed weeks. The UI is available in English and Russian, switchable in the
-Profile tab.
+see a history of completed weeks. A "Progress" section lets you log stroke counts over a
+distance (a low-tech SWOLF-style efficiency tracker) and, if you set a gender and a freestyle
+time trial, compares your time against current world records and Russian ЕВСК classification
+standards, with a concrete next-rank goal to chase. The UI is available in English and Russian,
+switchable in the Profile tab.
 
 The app is local-first: your profile is saved on-device and the week's plan is generated from
 it, no account or server required. There's no cloud backup, but you can copy your profile as

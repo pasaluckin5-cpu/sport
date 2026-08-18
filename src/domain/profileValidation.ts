@@ -1,10 +1,12 @@
-import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, PoolLength, TrainingGoal } from './types';
+import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, Gender, PoolLength, RaceStroke, TrainingGoal } from './types';
 
 const LEVELS: AthleteLevel[] = ['beginner', 'intermediate', 'advanced'];
 const GOALS: TrainingGoal[] = ['fitness', 'endurance', 'speed', 'technique'];
 const UNITS: DistanceUnit[] = ['meters', 'yards'];
 const POOL_LENGTHS: PoolLength[] = [25, 50];
 const EQUIPMENT_IDS: Equipment[] = ['fins', 'paddles', 'pullBuoy', 'kickboard', 'snorkel', 'parachute', 'tempoTrainer', 'band'];
+const RACE_STROKES: RaceStroke[] = ['freestyle', 'backstroke', 'breaststroke', 'butterfly', 'im'];
+const GENDERS: Gender[] = ['male', 'female'];
 
 /** Parses and validates a profile backup pasted in by the user — an external-content boundary. */
 export function parseProfileBackup(text: string): AthleteProfile | null {
@@ -35,6 +37,16 @@ export function parseProfileBackup(text: string): AthleteProfile | null {
     }
   }
 
+  const primaryStrokes =
+    Array.isArray(d.primaryStrokes) && d.primaryStrokes.every((s) => RACE_STROKES.includes(s as RaceStroke))
+      ? (d.primaryStrokes as RaceStroke[])
+      : undefined;
+  const primaryDistances =
+    Array.isArray(d.primaryDistances) && d.primaryDistances.every((n) => typeof n === 'number')
+      ? (d.primaryDistances as number[])
+      : undefined;
+  const gender = GENDERS.includes(d.gender as Gender) ? (d.gender as Gender) : undefined;
+
   return {
     level: d.level as AthleteLevel,
     goal: d.goal as TrainingGoal,
@@ -45,5 +57,8 @@ export function parseProfileBackup(text: string): AthleteProfile | null {
     unit,
     poolLength,
     benchmark,
+    primaryStrokes,
+    primaryDistances,
+    gender,
   };
 }

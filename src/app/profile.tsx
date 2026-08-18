@@ -15,7 +15,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { EQUIPMENT_CATALOG, equipmentLabel } from '@/domain/equipment';
 import { DEFAULT_PROFILE } from '@/domain/planGenerator';
 import { parseProfileBackup } from '@/domain/profileValidation';
-import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, PoolLength, RaceStroke, TrainingGoal } from '@/domain/types';
+import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, Gender, PoolLength, RaceStroke, TrainingGoal } from '@/domain/types';
 import { unitAbbrev } from '@/i18n/format';
 import { AppLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
 import { useTheme } from '@/hooks/use-theme';
@@ -28,6 +28,7 @@ const UNITS: DistanceUnit[] = ['meters', 'yards'];
 const POOL_LENGTHS: PoolLength[] = [25, 50];
 const BENCHMARK_DISTANCES = [100, 200, 400, 1000];
 const RACE_STROKES: RaceStroke[] = ['freestyle', 'backstroke', 'breaststroke', 'butterfly', 'im'];
+const GENDERS: Gender[] = ['male', 'female'];
 // Standard championship race distances differ by course: SCY (yards) meets swim 500/1000/1650
 // free instead of the 400/800/1500 used in meters (SCM/LCM) competition.
 const METERS_RACE_DISTANCES = [50, 100, 200, 400, 800, 1500];
@@ -334,6 +335,22 @@ function ProfileForm() {
                   <ThemedText type="link">{t('common.clear')}</ThemedText>
                 </Pressable>
               )}
+            </FormSection>
+          )}
+
+          {isSwimming && (
+            <FormSection label={t('profile.section.gender')}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('profile.genderHint')}
+              </ThemedText>
+              <ChipGroup
+                options={GENDERS.map((value) => ({ value, label: t(`profile.gender.${value}`) }))}
+                selected={form.gender ? [form.gender] : []}
+                onToggle={(value) => {
+                  setSaved(false);
+                  setForm((f) => ({ ...f, gender: f.gender === value ? undefined : value }));
+                }}
+              />
             </FormSection>
           )}
 
