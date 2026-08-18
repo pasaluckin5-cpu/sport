@@ -38,10 +38,14 @@ restore) and paste it back in on a new device.
 to sync your profile/history/stroke log across devices, and unlocks a coach/team feature: a
 coach creates a team, invites athletes by email, and can then see their profile/history/results,
 assign structured workouts (rendered the same way the generated plan is), and message them
-one-to-one or in a team-wide group chat. This is entirely opt-in — the app works fully offline
-with no account, exactly as above, unless you choose to sign in. See
-`docs/supabase-architecture.md` for the schema/permissions design and `.env.example` for the
-setup needed to point the app at your own Supabase project.
+one-to-one or in a team-wide group chat. There's also a lighter-weight **friends** feature on the
+Plan tab — add a friend by email and, once they accept, follow their logged results with the
+same world-record/classification-rank comparison your own Progress section uses; a friend only
+ever sees your results and basic profile, never your training-plan settings or history the way a
+coach can. All of this is entirely opt-in — the app works fully offline with no account, exactly
+as above, unless you choose to sign in. See `docs/supabase-architecture.md` for the
+schema/permissions design and `.env.example` for the setup needed to point the app at your own
+Supabase project.
 
 ## Getting started
 

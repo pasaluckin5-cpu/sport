@@ -4,7 +4,7 @@ import { generateWeekPlan } from '@/domain/planGenerator';
 import { AthleteProfile } from '@/domain/types';
 
 import i18n from './index';
-import { focusNoteText, formatDayShareText, formatSetStep, recordsProgressText } from './format';
+import { focusNoteText, formatDayShareText, formatSetStep, friendResultProgressText, recordsProgressText } from './format';
 
 const PROFILE: AthleteProfile = {
   level: 'intermediate',
@@ -97,6 +97,21 @@ describe('recordsProgressText', () => {
     const result = recordsProgressText('male', { distance: 100, timeSec: 40 }, 'meters', i18n.t);
     const progress = result as Exclude<typeof result, 'needsGender' | 'needsBenchmark'>;
     expect(progress.percentOff).toBeUndefined();
+  });
+});
+
+describe('friendResultProgressText', () => {
+  it('includes ЕВСК rank progress for a freestyle result', () => {
+    const progress = friendResultProgressText('male', 'freestyle', 100, 65, 'meters', i18n.t);
+    expect(progress.worldRecord).toBeDefined();
+    expect(progress.goal).not.toBe(i18n.t('progress.records.noStandard'));
+  });
+
+  it('skips rank progress for a non-freestyle result (ЕВСК is freestyle-only)', () => {
+    const progress = friendResultProgressText('male', 'backstroke', 100, 65, 'meters', i18n.t);
+    expect(progress.worldRecord).toBeDefined();
+    expect(progress.currentRank).toBeUndefined();
+    expect(progress.goal).toBe(i18n.t('progress.records.noStandard'));
   });
 });
 

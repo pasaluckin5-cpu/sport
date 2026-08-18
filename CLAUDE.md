@@ -290,6 +290,15 @@ its SQL editor. Nothing here is wired to a real project by default: `src/supabas
   does *not* delete the Supabase Auth login itself (email/password) — that needs a service-role
   operation this pure-client app deliberately doesn't have; the Privacy Policy is explicit that
   this currently requires contacting the developer.
+- **Friends** (`supabase/migrations/0002_friends.sql`, `src/supabase/friends.ts`,
+  `src/components/friends-panel.tsx`): a separate, symmetric relationship from coach/team — an
+  athlete sends a friend request by email (`add_friend_by_email` RPC), either side can accept
+  a pending request, and the grant is deliberately much narrower than a coach's: friends can see
+  each other's logged `results` and basic `profiles` row (email + gender, needed to compute a
+  ЕВСК rank), never the training-plan data (`athlete_profiles`/`completions`/`stroke_log`) a
+  linked coach can see. `src/i18n/format.ts`'s `friendResultProgressText` reuses the same
+  world-record/ЕВСК-rank comparison the individual "Records & goals" section uses, so a friend's
+  logged result shows the same kind of "next goal" line.
 **Sharing**: each day's `Collapsible` on the Plan tab has a "Share" action
 (`src/utils/share.ts`'s `shareOrCopy`) that opens the native share sheet on iOS/Android
 (`Share.share` from `react-native`) so an athlete can send a session to a coach or training

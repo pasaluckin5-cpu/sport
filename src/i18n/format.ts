@@ -92,23 +92,14 @@ export interface RecordsProgress {
  * classification standards (src/domain/standards.ts) and returns display-ready lines, or a
  * reason code when there isn't enough profile info yet to compute anything.
  */
-export function recordsProgressText(
-  gender: Gender | undefined,
-  benchmark: PaceBenchmark | undefined,
-  unit: DistanceUnit,
-  t: TFunction,
-): RecordsProgress | 'needsGender' | 'needsBenchmark' {
-  if (!gender) return 'needsGender';
-  if (!benchmark || benchmark.timeSec <= 0) return 'needsBenchmark';
-
-  const { distance, timeSec } = benchmark;
+function buildRecordsProgress(gender: Gender, stroke: RaceStroke, distance: number, timeSec: number, unit: DistanceUnit, t: TFunction): RecordsProgress {
   const abbrev = unitAbbrev(unit);
   const result: RecordsProgress = {
     yourTime: t('progress.records.yourTime', { distance, unit: abbrev, time: formatPace100(timeSec) }),
     goal: t('progress.records.noStandard'),
   };
 
-  const record = findWorldRecord(gender, 'freestyle', distance);
+  const record = findWorldRecord(gender, stroke, distance);
   if (record) {
     result.worldRecord = t('progress.records.worldRecord', {
       context: gender,
@@ -120,21 +111,57 @@ export function recordsProgressText(
     if (percentOff > 0) result.percentOff = t('progress.records.percentOff', { percent: percentOff.toFixed(1) });
   }
 
-  const current = rankForTime(gender, distance, timeSec);
-  if (current) result.currentRank = t('progress.records.currentRank', { rank: t(`evskRank.${current}`) });
+  // ЕВСК classification standards are freestyle-only (src/domain/standards.ts) — other strokes
+  // still get the world-record comparison above, just no rank/goal line.
+  if (stroke === 'freestyle') {
+    const current = rankForTime(gender, distance, timeSec);
+    if (current) result.currentRank = t('progress.records.currentRank', { rank: t(`evskRank.${current}`) });
 
-  const next = nextRankTarget(gender, distance, timeSec);
-  if (next) {
-    result.goal = t('progress.records.nextRank', {
-      rank: t(`evskRank.${next.rank}`),
-      time: formatPace100(next.timeSec),
-      diff: next.secondsToImprove.toFixed(1),
-    });
-  } else if (current === 'msmk') {
-    result.goal = t('progress.records.maxRank');
+    const next = nextRankTarget(gender, distance, timeSec);
+    if (next) {
+      result.goal = t('progress.records.nextRank', {
+        rank: t(`evskRank.${next.rank}`),
+        time: formatPace100(next.timeSec),
+        diff: next.secondsToImprove.toFixed(1),
+      });
+    } else if (current === 'msmk') {
+      result.goal = t('progress.records.maxRank');
+    }
   }
 
   return result;
+}
+
+/**
+ * Compares a freestyle time-trial benchmark against the world record and Russian ЕВСК
+ * classification standards (src/domain/standards.ts) and returns display-ready lines, or a
+ * reason code when there isn't enough profile info yet to compute anything.
+ */
+export function recordsProgressText(
+  gender: Gender | undefined,
+  benchmark: PaceBenchmark | undefined,
+  unit: DistanceUnit,
+  t: TFunction,
+): RecordsProgress | 'needsGender' | 'needsBenchmark' {
+  if (!gender) return 'needsGender';
+  if (!benchmark || benchmark.timeSec <= 0) return 'needsBenchmark';
+  return buildRecordsProgress(gender, 'freestyle', benchmark.distance, benchmark.timeSec, unit, t);
+}
+
+/**
+ * Same comparison as recordsProgressText, but for a friend's logged result (src/supabase/
+ * results.ts), which — unlike the local benchmark — carries its own real stroke rather than
+ * always assuming freestyle.
+ */
+export function friendResultProgressText(
+  gender: Gender,
+  stroke: RaceStroke,
+  distance: number,
+  timeSec: number,
+  unit: DistanceUnit,
+  t: TFunction,
+): RecordsProgress {
+  return buildRecordsProgress(gender, stroke, distance, timeSec, unit, t);
 }
 
 /** Plain-text rendering of a day's session(s), for sharing with a coach or training partner. */

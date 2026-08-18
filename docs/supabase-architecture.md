@@ -484,13 +484,44 @@ the SQL editor / a migration), never through client code, so it's never needed t
    `formatSetStep`/`formatGymBlock` formatters, one rendering path for generated and
    coach-authored sessions alike.
 
+## Friends (supabase/migrations/0002_friends.sql)
+
+Shipped as a second, additive migration rather than editing `0001_init.sql` — that file had
+already been applied to a real project by the time this was designed, and Postgres migrations
+should be append-only once run. `0002_friends.sql` only creates new objects and adds two new,
+*additional* SELECT policies (`results_select_friends`, `profiles_select_friends`) rather than
+touching the 0001 policies — Postgres OR's multiple permissive policies for the same command
+together, so this purely widens read access, it can't accidentally narrow anything from 0001.
+
+- **Symmetric, not hierarchical**: a `friendships` table (`requester_id`, `recipient_id`,
+  `status: 'pending' | 'active'`) — unlike `team_members`, either party ends up with equal
+  standing once accepted (`is_friend_of(uuid)` checks both directions). The requester proposes
+  by email via `add_friend_by_email()` (same security-definer-RPC pattern as
+  `invite_athlete_by_email()`, for the same reason — a stranger's uuid isn't otherwise
+  discoverable); only the recipient can accept.
+- **Deliberately narrow read grant** — the point flagged below before this shipped: friends get
+  `results` (what the request asked for — "follow their results") and just the `profiles` row
+  (email for display, `gender` so `friendResultProgressText` can compute a real ЕВСК rank/goal
+  for a friend's freestyle results) — never `athlete_profiles`/`completions`/`stroke_log`, which
+  stay coach-only. A friend is a peer to compare times with, not someone who sees your training
+  schedule.
+- **UI reuses the individual Progress section's own logic**: `src/i18n/format.ts`'s
+  `friendResultProgressText` factors the shared comparison logic out of `recordsProgressText`
+  (`buildRecordsProgress`) so a friend's logged result gets the same world-record/ЕВСК-rank
+  treatment the athlete's own benchmark does — just parameterized by the *result's* actual
+  stroke instead of always assuming freestyle, and skipping the rank/goal line for any
+  non-freestyle stroke (ЕВСК data stays freestyle-only, see `standards.ts`).
+
 ## Still open / out of scope for this pass
 
-1. **Friends** (from the original request, separate from coach) aren't in this schema — scoped
-   out intentionally; worth its own design pass once the coach/team model above ships, since it
-   needs a much looser read grant than the coach relationship (probably a curated "public
-   summary" view rather than raw table access).
-2. **Team chat pagination/real-time**: `team_messages`/`messages` are plain tables for v1 (polled
-   or fetched on screen focus); Supabase Realtime (`supabase.channel(...).on('postgres_changes',
-   ...)`) is a natural follow-up for live delivery without a page refresh, not required to ship
-   a working chat.
+1. **Team chat pagination/real-time**: `team_messages`/`messages`/`friendships`-adjacent data are
+   plain tables (polled or fetched on screen focus); Supabase Realtime
+   (`supabase.channel(...).on('postgres_changes', ...)`) is a natural follow-up for live delivery
+   without a page refresh, not required to ship a working chat or friends list.
+2. **Sensors**: raised in the original request, not attempted. Specialized swim-sensor hardware
+   (Form Smart Goggles, TritonWear, Garmin's swim metrics) doesn't expose a public third-party
+   API to indie apps in any case found — that would need a vendor partnership, not an SDK
+   integration. The one broadly-interoperable option is generic Bluetooth Heart Rate Service
+   (works with most HR straps and many watches), which needs `react-native-ble-plx` and an EAS
+   dev-client build (not Expo Go) — real hardware to pair with and a physical device to test on,
+   neither available in this sandbox, so not built speculatively.

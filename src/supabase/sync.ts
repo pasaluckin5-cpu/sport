@@ -149,5 +149,7 @@ export async function deleteCloudData(userId: string): Promise<void> {
     supabase.from('completions').delete().eq('user_id', userId),
     supabase.from('stroke_log').delete().eq('user_id', userId),
     supabase.from('results').delete().eq('athlete_id', userId),
+    supabase.from('friendships').delete().eq('requester_id', userId),
+    supabase.from('friendships').delete().eq('recipient_id', userId),
   ]);
 }
