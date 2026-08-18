@@ -3,9 +3,12 @@ import {
   buildCooldown,
   buildGymSession,
   buildMainSet,
+  buildStrokeRotation,
   buildWarmup,
   roundToPoolLength,
   sessionVolume,
+  specialtyFactor,
+  strokeFor,
 } from './workoutLibrary';
 import { AthleteProfile, DayPlan, GymFocus, GymMode, PoolSession, TrainingGoal, WeekPlan, Zone } from './types';
 import { isoWeekKey, rotateArray, weekKeyToOffset } from './week';
@@ -73,18 +76,25 @@ function clamp(value: number, min: number, max: number): number {
 function assemblePoolSession(
   zone: Zone,
   profile: AthleteProfile,
-  dayIndex: number,
+  sessionIndex: number,
   weekOffset: number,
 ): PoolSession {
-  const { level, poolSessionDurationMin: durationMin, equipment, unit, poolLength, benchmark } = profile;
+  const { level, poolSessionDurationMin: durationMin, equipment, unit, poolLength, benchmark, primaryStrokes, primaryDistances } =
+    profile;
   const volume = sessionVolume(level, durationMin, unit, poolLength, benchmark);
   const warmupDistance = roundToPoolLength(volume * 0.18, poolLength);
   const cooldownDistance = roundToPoolLength(volume * 0.12, poolLength);
   const mainDistance = Math.max(poolLength, volume - warmupDistance - cooldownDistance);
 
+  // Indexed by the session's position within the week (0, 1, 2, ...) rather than its weekday —
+  // weekdays for a given session count are often all the same parity (e.g. 3/week = Mon/Wed/Fri,
+  // all even), which would otherwise systematically collide with a period-2 stroke rotation and
+  // could hide the athlete's primary stroke from an entire low-frequency week.
+  const stroke = strokeFor(sessionIndex, weekOffset, buildStrokeRotation(primaryStrokes));
+  const specialty = specialtyFactor(primaryDistances);
   const pace100Sec = benchmark ? basePace100Sec(benchmark) : undefined;
-  const warmup = buildWarmup(warmupDistance, equipment, dayIndex, poolLength, weekOffset);
-  const main = buildMainSet(zone, mainDistance, equipment, level, dayIndex, poolLength, weekOffset, pace100Sec);
+  const warmup = buildWarmup(warmupDistance, equipment, stroke, poolLength);
+  const main = buildMainSet(zone, mainDistance, equipment, level, stroke, poolLength, specialty, pace100Sec);
   const cooldown = buildCooldown(cooldownDistance);
 
   const allSteps = [...warmup, ...main, ...cooldown];
@@ -125,7 +135,7 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
   const days: DayPlan[] = Array.from({ length: 7 }, (_, dayIndex) => ({ dayIndex }));
 
   poolDays.forEach((dayIndex, i) => {
-    days[dayIndex].pool = assemblePoolSession(zones[i], profile, dayIndex, strokeOffset);
+    days[dayIndex].pool = assemblePoolSession(zones[i], profile, i, strokeOffset);
   });
 
   const gymCount = clamp(profile.gymSessionsPerWeek, 0, 7);

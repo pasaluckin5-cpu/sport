@@ -25,7 +25,10 @@ export type DistanceUnit = 'meters' | 'yards';
 /** Pool course length, in the athlete's chosen unit (e.g. a 25m or 50m pool; a 25yd or 50yd pool). */
 export type PoolLength = 25 | 50;
 
-export type StrokeKey = 'freestyle' | 'im' | 'backstroke' | 'choice';
+export type StrokeKey = 'freestyle' | 'backstroke' | 'breaststroke' | 'butterfly' | 'im' | 'choice';
+
+/** The four competitive strokes plus IM — selectable as an athlete's specialty (excludes 'choice'). */
+export type RaceStroke = Exclude<StrokeKey, 'choice'>;
 
 /**
  * What a main-set step actually is, kept as a key rather than a formatted sentence so the UI
@@ -154,6 +157,11 @@ export interface AthleteProfile {
   poolLength: PoolLength;
   /** Optional — when present, session volume and set paces are derived from this instead of the level table. */
   benchmark?: PaceBenchmark;
+  /** Which strokes the athlete races/focuses on. Empty/absent = generic freestyle-biased default. */
+  primaryStrokes?: RaceStroke[];
+  /** Main race distance(s) trained for, in the athlete's unit (e.g. 100, 200) — biases main-set rep
+   *  length and rest toward sprint- or distance-style training. Empty/absent = neutral mid-distance. */
+  primaryDistances?: number[];
 }
 
 export interface WeekPlan {

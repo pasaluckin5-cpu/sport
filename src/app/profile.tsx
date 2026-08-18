@@ -15,7 +15,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { EQUIPMENT_CATALOG, equipmentLabel } from '@/domain/equipment';
 import { DEFAULT_PROFILE } from '@/domain/planGenerator';
 import { parseProfileBackup } from '@/domain/profileValidation';
-import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, PoolLength, TrainingGoal } from '@/domain/types';
+import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, PoolLength, RaceStroke, TrainingGoal } from '@/domain/types';
 import { unitAbbrev } from '@/i18n/format';
 import { AppLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
 import { useTheme } from '@/hooks/use-theme';
@@ -27,6 +27,11 @@ const GOALS: TrainingGoal[] = ['fitness', 'endurance', 'speed', 'technique'];
 const UNITS: DistanceUnit[] = ['meters', 'yards'];
 const POOL_LENGTHS: PoolLength[] = [25, 50];
 const BENCHMARK_DISTANCES = [100, 200, 400, 1000];
+const RACE_STROKES: RaceStroke[] = ['freestyle', 'backstroke', 'breaststroke', 'butterfly', 'im'];
+// Standard championship race distances differ by course: SCY (yards) meets swim 500/1000/1650
+// free instead of the 400/800/1500 used in meters (SCM/LCM) competition.
+const METERS_RACE_DISTANCES = [50, 100, 200, 400, 800, 1500];
+const YARDS_RACE_DISTANCES = [50, 100, 200, 500, 1000, 1650];
 
 function FormSection({ label, children }: PropsWithChildren<{ label: string }>) {
   return (
@@ -90,6 +95,25 @@ function ProfileForm() {
       ...f,
       equipment: f.equipment.includes(id) ? f.equipment.filter((e) => e !== id) : [...f.equipment, id],
     }));
+  }
+
+  function toggleStroke(stroke: RaceStroke) {
+    setSaved(false);
+    setForm((f) => {
+      const current = f.primaryStrokes ?? [];
+      return { ...f, primaryStrokes: current.includes(stroke) ? current.filter((s) => s !== stroke) : [...current, stroke] };
+    });
+  }
+
+  function toggleDistance(distance: number) {
+    setSaved(false);
+    setForm((f) => {
+      const current = f.primaryDistances ?? [];
+      return {
+        ...f,
+        primaryDistances: current.includes(distance) ? current.filter((d) => d !== distance) : [...current, distance],
+      };
+    });
   }
 
   const isSwimming = form.poolSessionsPerWeek > 0;
@@ -310,6 +334,35 @@ function ProfileForm() {
                   <ThemedText type="link">{t('common.clear')}</ThemedText>
                 </Pressable>
               )}
+            </FormSection>
+          )}
+
+          {isSwimming && (
+            <FormSection label={t('profile.section.strokes')}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('profile.strokesHint')}
+              </ThemedText>
+              <ChipGroup
+                options={RACE_STROKES.map((value) => ({ value, label: t(`stroke.${value}`) }))}
+                selected={form.primaryStrokes ?? []}
+                onToggle={toggleStroke}
+              />
+            </FormSection>
+          )}
+
+          {isSwimming && (
+            <FormSection label={t('profile.section.distances')}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('profile.distancesHint')}
+              </ThemedText>
+              <ChipGroup
+                options={(form.unit === 'yards' ? YARDS_RACE_DISTANCES : METERS_RACE_DISTANCES).map((value) => ({
+                  value: String(value),
+                  label: `${value}${unitAbbrev(form.unit)}`,
+                }))}
+                selected={(form.primaryDistances ?? []).map(String)}
+                onToggle={(value) => toggleDistance(Number(value))}
+              />
             </FormSection>
           )}
 

@@ -42,6 +42,7 @@ export default {
       swimDryland: 'Swim-specific dryland',
       generalFitness: 'General fitness',
     },
+    focusNote: 'Specialty: {{subject}} — focus on {{emphasis}}.',
     history: {
       title: 'History',
       empty: 'Completed sessions will show up here, grouped by week.',
@@ -61,10 +62,16 @@ export default {
       units: 'Units & pool',
       equipment: 'Equipment you have',
       benchmark: 'Recent time trial (optional)',
+      strokes: 'Main strokes (optional)',
+      distances: 'Main race distances (optional)',
       language: 'Language',
       backup: 'Backup & restore',
     },
     poolSessionsHint: "Set this to 0 if you don't swim — you'll get a gym/fitness-only plan instead.",
+    strokesHint:
+      "Which stroke(s) you race or want to focus on. We'll still train plenty of freestyle regardless — it's the base of most aerobic work — but technique drills and main sets will lean toward your strokes.",
+    distancesHint:
+      'Your main race distance(s). Sprinters get shorter, punchier main-set reps with fuller recovery; distance swimmers get longer reps with less rest, closer to race pace.',
     gymHint: {
       swim: 'Exercises are chosen to support your swimming — shoulder health, pull strength, kick power, and core/streamline control — not just generic strength.',
       general: 'A balanced general-fitness split — full-body, upper, lower, core, and mobility.',
@@ -121,9 +128,16 @@ export default {
   swimSession: '{{zone}} swim',
   stroke: {
     freestyle: 'freestyle',
-    im: 'IM',
     backstroke: 'backstroke',
+    breaststroke: 'breaststroke',
+    butterfly: 'butterfly',
+    im: 'IM',
     choice: 'choice',
+  },
+  focus: {
+    sprint: 'starts, turns, and race-pace speed',
+    balanced: 'a blend of speed and endurance',
+    distance: 'aerobic endurance and pace control',
   },
   rest: 'rest',
   reps: {
@@ -135,6 +149,11 @@ export default {
     warmupPull: 'easy pull, long stroke, focus on body position',
     cooldown: 'easy choice swim, shake out the arms and legs',
     drill: '{{stroke}} drill (catch-up, single-arm, or fist swim)',
+    drill_freestyle: '{{stroke}} drill (catch-up, fingertip drag, or 6-kick switch)',
+    drill_backstroke: '{{stroke}} drill (one-arm with a head-position cue, or 6-kick switch)',
+    drill_breaststroke: '{{stroke}} drill (pullouts with 1-2-3 dolphin kicks, or frog-kick isolation)',
+    drill_butterfly: '{{stroke}} drill (single-arm fly, or vertical dolphin kick)',
+    drill_im: '{{stroke}} drill, rotating through all four strokes',
     drillBuild: 'swim, smooth build focusing on the drill cue, {{stroke}}',
     steadySwim: '{{stroke}}, moderate steady pace',
     steadyKick: 'steady kick, moderate effort',

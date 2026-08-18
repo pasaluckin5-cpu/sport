@@ -30,6 +30,9 @@ Tell it:
   parachute, tempo trainer, ankle band
 - Optionally, a recent time trial, so main-set paces are targeted to your real pace instead
   of a rough estimate
+- Optionally, your main competitive stroke(s) and race distance(s) — sessions get real,
+  stroke-specific technique drills, and main sets lean sprint- or distance-style to match what
+  you're actually racing
 
 It builds a full week: warm-up, main set, and cool-down for every pool day, plus gym days
 placed so a heavy leg day never lands right before a hard kick or sprint session. Those gym
@@ -84,6 +87,9 @@ Swim Planner составляет персональный план тренир
   темп-тренер, резинка для ног
 - По желанию — результат недавнего контрольного заплыва, чтобы темп в основных отрезках
   считался от вашей реальной скорости, а не приблизительно
+- По желанию — ваш основной стиль (стили) и соревновательная дистанция — тренировки получат
+  реальные упражнения на технику именно для вашего стиля, а основная часть сместится в сторону
+  спринта или дистанции в зависимости от того, к чему вы готовитесь
 
 Приложение строит полную неделю: разминка, основная часть и заминка для каждой тренировки в
 бассейне, плюс тренировки в зале, расставленные так, чтобы тяжёлый день на ноги никогда не

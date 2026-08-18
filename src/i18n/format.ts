@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 
-import { formatPace100 } from '@/domain/workoutLibrary';
-import { DayPlan, DistanceUnit, GymBlock, GymMode, SetStep, Zone } from '@/domain/types';
+import { focusEmphasis, formatPace100, specialtyFactor } from '@/domain/workoutLibrary';
+import { DayPlan, DistanceUnit, GymBlock, GymMode, RaceStroke, SetStep, Zone } from '@/domain/types';
 
 /** "m"/"yd" — a universal abbreviation, not translated per-language. */
 export function unitAbbrev(unit: DistanceUnit): string {
@@ -21,7 +21,11 @@ export function formatSetStep(step: SetStep, t: TFunction, unit: DistanceUnit): 
   const abbrev = unitAbbrev(unit);
   const prefix = step.reps > 1 ? `${step.reps} x ${step.repDistance}${abbrev} ` : `${step.distance}${abbrev} `;
   const stroke = step.stroke ? t(`stroke.${step.stroke}`) : undefined;
-  const kindText = t(`setKind.${step.kind}`, stroke ? { stroke } : undefined);
+  // Drills get real, stroke-specific content (e.g. "6-kick switch" for backstroke vs. "3
+  // kicks, 1 pull" for breaststroke) via i18next's context feature — setKind.drill_<stroke> —
+  // falling back to the generic setKind.drill template when no such variant exists.
+  const context = step.kind === 'drill' && step.stroke && step.stroke !== 'choice' ? step.stroke : undefined;
+  const kindText = t(`setKind.${step.kind}`, { ...(stroke ? { stroke } : {}), context });
   const paceText = step.paceSec !== undefined ? ` @ ${formatPace100(step.paceSec)}` : '';
   return `${prefix}${kindText}${paceText}${formatRest(step, t)}`;
 }
@@ -47,6 +51,31 @@ export function zoneLabel(zone: Zone, t: TFunction): string {
 
 export function swimSessionTitle(zone: Zone, t: TFunction): string {
   return t('swimSession', { zone: zoneLabel(zone, t) });
+}
+
+/**
+ * A short, coach-style summary of what to emphasize, shown when the athlete has stated a
+ * specialty (primary strokes and/or primary race distances). Returns null when neither is set,
+ * so the caller can skip rendering it entirely.
+ */
+export function focusNoteText(
+  primaryStrokes: RaceStroke[] | undefined,
+  primaryDistances: number[] | undefined,
+  unit: DistanceUnit,
+  t: TFunction,
+): string | null {
+  const hasStrokes = !!primaryStrokes && primaryStrokes.length > 0;
+  const hasDistances = !!primaryDistances && primaryDistances.length > 0;
+  if (!hasStrokes && !hasDistances) return null;
+
+  const subject = [
+    hasStrokes ? primaryStrokes!.map((s) => t(`stroke.${s}`)).join(' / ') : undefined,
+    hasDistances ? primaryDistances!.map((d) => `${d}${unitAbbrev(unit)}`).join('/') : undefined,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const emphasis = t(`focus.${focusEmphasis(specialtyFactor(primaryDistances))}`);
+  return t('plan.focusNote', { subject, emphasis });
 }
 
 /** Plain-text rendering of a day's session(s), for sharing with a coach or training partner. */

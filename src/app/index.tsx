@@ -12,7 +12,15 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { equipmentLabel } from '@/domain/equipment';
 import { DAY_KEYS, DayPlan, DistanceUnit } from '@/domain/types';
 import { basePace100Sec, formatPace100 } from '@/domain/workoutLibrary';
-import { formatDayShareText, formatGymBlock, formatSetStep, gymModeLabel, swimSessionTitle, unitAbbrev } from '@/i18n/format';
+import {
+  focusNoteText,
+  formatDayShareText,
+  formatGymBlock,
+  formatSetStep,
+  gymModeLabel,
+  swimSessionTitle,
+  unitAbbrev,
+} from '@/i18n/format';
 import { useTheme } from '@/hooks/use-theme';
 import { SessionKind, useHistory } from '@/state/history-context';
 import { usePlan } from '@/state/plan-context';
@@ -187,6 +195,7 @@ export default function HomeScreen() {
   const poolSessions = weekPlan.days.filter((d) => d.pool).length;
   const gymSessions = weekPlan.days.filter((d) => d.gym).length;
   const abbrev = unitAbbrev(profile.unit);
+  const focusNote = focusNoteText(profile.primaryStrokes, profile.primaryDistances, profile.unit, t);
 
   return (
     <ScrollView
@@ -209,6 +218,11 @@ export default function HomeScreen() {
               ? t('plan.basePaceSuffix', { pace: formatPace100(basePace100Sec(profile.benchmark)), unit: abbrev })
               : ''}
           </ThemedText>
+          {focusNote && (
+            <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+              {focusNote}
+            </ThemedText>
+          )}
           <Pressable onPress={() => router.navigate('/profile')} style={({ pressed }) => pressed && styles.pressed}>
             <ThemedText type="link">{t('plan.editProfile')}</ThemedText>
           </Pressable>

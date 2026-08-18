@@ -17,6 +17,10 @@ It takes into account:
   tempo trainer, ankle band) — sets only call for gear you have
 - Optionally, a recent time trial (e.g. 400m), so main-set paces are targeted to you instead
   of a rough estimate by level
+- Optionally, your main competitive stroke(s) and race distance(s) — the plan interleaves that
+  stroke into your sessions with real, stroke-specific technique drills, and biases main-set rep
+  length/rest toward sprint- or distance-style training depending on your race distance, with a
+  short "coach note" on the Plan tab explaining the focus
 
 The plan varies from week to week (zone order, stroke emphasis, and gym focus rotate on a
 weekly cycle) instead of being the exact same week forever, and you can mark sessions done and

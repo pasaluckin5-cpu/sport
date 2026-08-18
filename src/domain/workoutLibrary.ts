@@ -8,6 +8,7 @@ import {
   GymMode,
   PaceBenchmark,
   PoolLength,
+  RaceStroke,
   SetStep,
   StrokeKey,
   Zone,
@@ -41,10 +42,54 @@ const ZONE_PACE_FACTOR: Partial<Record<Zone, number>> = {
   vo2max: 0.93,
 };
 
-const STROKE_ROTATION: StrokeKey[] = ['freestyle', 'im', 'freestyle', 'backstroke', 'freestyle', 'choice', 'freestyle'];
+const DEFAULT_STROKE_ROTATION: StrokeKey[] = ['freestyle', 'im', 'freestyle', 'backstroke', 'freestyle', 'choice', 'freestyle'];
 
-function strokeFor(dayIndex: number, weekOffset: number): StrokeKey {
-  return STROKE_ROTATION[(dayIndex + weekOffset) % STROKE_ROTATION.length];
+/**
+ * Builds the week's stroke rotation. With no stated specialty, freestyle dominates (the
+ * default — most training volume is freestyle regardless of specialty). With one or more
+ * primary strokes, they're interleaved with freestyle (still kept in the mix even for a
+ * non-freestyle specialist, since it's the standard aerobic-conditioning stroke) rather than
+ * replacing it outright.
+ *
+ * The interleaved rotation's length is deliberately even (2x the stroke count) rather than
+ * matching the 7-day week: `strokeFor` indexes into it with `% rotation.length`, and for an
+ * *even* length that preserves the original index's parity no matter how far it wraps — so
+ * freestyle/primary strictly alternate with no exceptions. An odd length (like 7) can't be
+ * 2-colored without one adjacent repeat, which could otherwise line up with a low-frequency
+ * session count (e.g. 3/week lands on same-parity weekdays) and hide the primary stroke from
+ * an entire week.
+ */
+export function buildStrokeRotation(primaryStrokes: RaceStroke[] | undefined): StrokeKey[] {
+  if (!primaryStrokes || primaryStrokes.length === 0) return DEFAULT_STROKE_ROTATION;
+  return Array.from({ length: primaryStrokes.length * 2 }, (_, i) =>
+    i % 2 === 0 ? 'freestyle' : primaryStrokes[(i - 1) / 2],
+  );
+}
+
+export function strokeFor(dayIndex: number, weekOffset: number, rotation: StrokeKey[]): StrokeKey {
+  return rotation[(dayIndex + weekOffset) % rotation.length];
+}
+
+/**
+ * 0 (pure sprint, e.g. the 50) .. 1 (pure distance, e.g. the mile/1500) — how an athlete's
+ * stated race distance(s) should bias main-set rep length and rest. Distances span a wide,
+ * multiplicative range (50 to 1500+), so the blend uses a log scale rather than a linear one.
+ * No stated distance defaults to a neutral midpoint rather than assuming either extreme.
+ */
+export function specialtyFactor(primaryDistances: number[] | undefined): number {
+  if (!primaryDistances || primaryDistances.length === 0) return 0.5;
+  const avg = primaryDistances.reduce((a, b) => a + b, 0) / primaryDistances.length;
+  const clamped = Math.min(1500, Math.max(50, avg));
+  return (Math.log2(clamped) - Math.log2(50)) / (Math.log2(1500) - Math.log2(50));
+}
+
+export type FocusEmphasis = 'sprint' | 'balanced' | 'distance';
+
+/** A coaching-style summary of what a specialty factor implies emphasizing in training. */
+export function focusEmphasis(factor: number): FocusEmphasis {
+  if (factor < 0.35) return 'sprint';
+  if (factor > 0.65) return 'distance';
+  return 'balanced';
 }
 
 /** Rounds to the nearest whole pool length (25 or 50), with a minimum of one length. */
@@ -93,15 +138,8 @@ export function sessionVolume(
   return roundToPoolLength((estimateDistancePerHour(level, unit, benchmark) * durationMin) / 60, poolLength);
 }
 
-export function buildWarmup(
-  distance: number,
-  equipment: Equipment[],
-  dayIndex: number,
-  poolLength: PoolLength,
-  weekOffset: number,
-): SetStep[] {
+export function buildWarmup(distance: number, equipment: Equipment[], stroke: StrokeKey, poolLength: PoolLength): SetStep[] {
   const steps: SetStep[] = [];
-  const stroke = strokeFor(dayIndex, weekOffset);
   const easyDistance = has(equipment, 'pullBuoy') ? roundToPoolLength(distance * 0.6, poolLength) : distance;
   steps.push({
     kind: 'warmupSwim',
@@ -169,32 +207,42 @@ export function buildMainSet(
   distance: number,
   equipment: Equipment[],
   level: AthleteLevel,
-  dayIndex: number,
+  stroke: StrokeKey,
   poolLength: PoolLength,
-  weekOffset: number,
+  specialty: number,
   pace100Sec?: number,
 ): SetStep[] {
-  const stroke = strokeFor(dayIndex, weekOffset);
   const steps: SetStep[] = [];
   const round = (m: number) => roundToPoolLength(m, poolLength);
+  // Sprint specialists (specialty→0) get shorter, punchier reps with fuller recovery; distance
+  // specialists (specialty→1) get longer, more continuous reps with less rest — both scaled
+  // around the same level-based baseline rather than replacing it. See specialtyFactor().
+  const repMultiplier = 0.75 + specialty * 0.5; // 0.75x at pure sprint .. 1.25x at pure distance
+  const restBias = 1 - specialty; // 1 at pure sprint (more rest) .. 0 at pure distance (less rest)
 
   switch (zone) {
     case 'technique': {
+      // Drills need a concrete stroke to be meaningful — fall back off of "choice" specifically.
+      const drillStroke = stroke === 'choice' ? 'freestyle' : stroke;
       const drillDistance = level === 'beginner' ? poolLength : poolLength * 2;
       const drillTotal = round(distance * 0.55);
       const drillEquip: Equipment[] = has(equipment, 'snorkel') ? ['snorkel'] : [];
-      steps.push(repStep('drill', fitReps(drillTotal, drillDistance), drillDistance, drillEquip, 'technique', { stroke }));
+      steps.push(
+        repStep('drill', fitReps(drillTotal, drillDistance), drillDistance, drillEquip, 'technique', { stroke: drillStroke }),
+      );
       const restTotal = round(distance - drillTotal);
       if (restTotal > 0) {
         const buildEquip: Equipment[] = has(equipment, 'paddles') ? ['paddles'] : [];
         steps.push(
-          repStep('drillBuild', fitReps(restTotal, drillDistance * 2), drillDistance * 2, buildEquip, 'technique', { stroke }),
+          repStep('drillBuild', fitReps(restTotal, drillDistance * 2), drillDistance * 2, buildEquip, 'technique', {
+            stroke: drillStroke,
+          }),
         );
       }
       break;
     }
     case 'aerobicBase': {
-      const repDistance = level === 'beginner' ? poolLength : poolLength * 2;
+      const repDistance = round((level === 'beginner' ? poolLength : poolLength * 2) * repMultiplier);
       const swimTotal = round(distance * (has(equipment, 'kickboard') || has(equipment, 'fins') ? 0.75 : 1));
       steps.push(
         repStep('steadySwim', fitReps(swimTotal, repDistance), repDistance, [], 'aerobicBase', {
@@ -215,14 +263,16 @@ export function buildMainSet(
       break;
     }
     case 'threshold': {
-      const repDistance = level === 'beginner' ? poolLength : poolLength * (level === 'intermediate' ? 2 : 4);
+      const baseRepDistance = level === 'beginner' ? poolLength : poolLength * (level === 'intermediate' ? 2 : 4);
+      const repDistance = round(baseRepDistance * repMultiplier);
+      const restSec = Math.round(8 + restBias * 7);
       const pullTotal = has(equipment, 'pullBuoy') && has(equipment, 'paddles') ? round(distance * 0.3) : 0;
       const swimTotal = round(distance - pullTotal);
       steps.push(
         repStep('thresholdSwim', fitReps(swimTotal, repDistance), repDistance, [], 'threshold', {
           stroke,
-          restSec: 10,
-          restSecMax: 15,
+          restSec,
+          restSecMax: restSec + 5,
           paceSec: targetPaceSec('threshold', pace100Sec, repDistance),
         }),
       );
@@ -236,12 +286,13 @@ export function buildMainSet(
       break;
     }
     case 'vo2max': {
-      const repDistance = level === 'beginner' ? poolLength : poolLength * 2;
+      const repDistance = round((level === 'beginner' ? poolLength : poolLength * 2) * repMultiplier);
+      const restSec = Math.round(15 + restBias * 15);
       steps.push(
         repStep('vo2Swim', fitReps(distance * 0.8, repDistance), repDistance, [], 'vo2max', {
           stroke,
-          restSec: 20,
-          restSecMax: 30,
+          restSec,
+          restSecMax: restSec + 10,
           paceSec: targetPaceSec('vo2max', pace100Sec, repDistance),
         }),
       );

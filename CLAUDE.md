@@ -123,6 +123,45 @@ across the week with the same `POOL_DAY_PATTERNS` table used for pool days (reus
 its "spread N per week" property) instead of the pool-day/rest-day-aware placement used when
 there's swimming to work around.
 
+**Specialization (primary strokes & race distances)**: swimmers can optionally set
+`AthleteProfile.primaryStrokes` (`RaceStroke[]` — freestyle/backstroke/breaststroke/butterfly/im)
+and `primaryDistances` (`number[]`, in the athlete's unit) on the Profile screen, so the
+generator can bias the plan toward what they're actually training for instead of a generic
+freestyle-only default — both fields are optional and only shown when `poolSessionsPerWeek > 0`.
+- `buildStrokeRotation(primaryStrokes)` (`workoutLibrary.ts`) interleaves freestyle with the
+  chosen stroke(s) — `[freestyle, strokeA, freestyle, strokeB, ...]` — falling back to
+  `DEFAULT_STROKE_ROTATION` (freestyle-heavy) when no strokes are set. The array length is
+  deliberately `primaryStrokes.length * 2` (always even), not a fixed 7: `k % evenLength`
+  preserves `k`'s parity with no wraparound exceptions, so strict freestyle/primary alternation
+  is mathematically guaranteed. This matters because `POOL_DAY_PATTERNS` weekdays for a given
+  session count are often all the same parity (e.g. 3/week = Mon/Wed/Fri, all even) — an odd-length
+  rotation (or indexing by weekday instead of session order) can systematically collide with that
+  parity and hide the primary stroke from an entire low-frequency week. `strokeFor(sessionIndex,
+  weekOffset, rotation)` is indexed by the pool session's 0-based position *within the week*
+  (not its weekday) for the same reason — consecutive session indices are always truly
+  consecutive integers, unlike weekday numbers.
+- `specialtyFactor(primaryDistances)` (`workoutLibrary.ts`) log-scales the average of the chosen
+  distances between 50 (pure sprint, factor 0) and 1500 (pure distance, factor 1); no distances
+  set defaults to `0.5` (neutral mid-distance). `buildMainSet` uses it to scale aerobicBase/
+  threshold/vo2max rep length (`repMultiplier = 0.75 + specialty * 0.5`) and rest
+  (`restBias = 1 - specialty`, more rest for sprint-biased reps) — sprint and recovery zones stay
+  unmodulated since sprint work is inherently short/max-effort regardless of race distance, and
+  recovery is universal. `focusEmphasis(factor)` buckets the factor into `'sprint' | 'balanced' |
+  'distance'` for display.
+- Technique-zone drill steps get stroke-specific wording via i18next's `context` feature:
+  `formatSetStep` (`src/i18n/format.ts`) passes `context: step.stroke` so `t('setKind.drill', {
+  context: 'backstroke' })` resolves to the `setKind.drill_backstroke` key (falling back to the
+  generic `setKind.drill` if a stroke-specific key is missing) — real technique cues per stroke
+  (e.g. fingertip drag / 6-kick switch for freestyle, one-arm drill for backstroke, pullout
+  dolphin-kick progressions for breaststroke, single-arm/vertical-dolphin work for butterfly)
+  rather than one generic "technique drill" line for every stroke.
+- `focusNoteText` (`src/i18n/format.ts`) renders a short "coach note" (e.g. "Specialty:
+  butterfly · 100m — focus on a blend of speed and endurance.") shown on the Plan screen
+  (`index.tsx`) right under the week summary, or `null` when neither field is set. This is
+  templating grounded in real training principles (sprint/distance training emphasis, real
+  stroke-technique cues), not live coaching — it doesn't see or adapt to how a session actually
+  felt, and there's no video/technique analysis.
+
 **Weekly variation & history**: nothing about a *profile* changes week to week, but
 `generateWeekPlan`'s week-key rotation (above) means the actual zone order, stroke emphasis,
 and gym-focus order differ across calendar weeks even for an unchanged profile — so the plan

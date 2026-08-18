@@ -109,8 +109,10 @@ describe('generateWeekPlan', () => {
 
   it('produces the same plan for the same week key (deterministic)', () => {
     const profile = withProfile({ poolSessionsPerWeek: 4, gymSessionsPerWeek: 2 });
-    const a = generateWeekPlan(profile, { weekKey: '2026-W10' });
-    const b = generateWeekPlan(profile, { weekKey: '2026-W10' });
+    // generatedAt is a real timestamp (not derived from the profile/weekKey), so it's excluded
+    // from the determinism check — everything else about the plan must match exactly.
+    const { generatedAt: _a, ...a } = generateWeekPlan(profile, { weekKey: '2026-W10' });
+    const { generatedAt: _b, ...b } = generateWeekPlan(profile, { weekKey: '2026-W10' });
     expect(a).toEqual(b);
   });
 
@@ -174,5 +176,77 @@ describe('generateWeekPlan', () => {
     );
     expect(speedPlan.days.find((d) => d.gym)!.gym!.focus).toBe('lowerBody');
     expect(techniquePlan.days.find((d) => d.gym)!.gym!.focus).toBe('mobility');
+  });
+
+  describe('specialization: primary strokes and race distances', () => {
+    it('uses the stated primary stroke in main-set steps instead of the freestyle-heavy default', () => {
+      const plan = generateWeekPlan(withProfile({ poolSessionsPerWeek: 7, primaryStrokes: ['breaststroke'] }));
+      const strokesUsed = new Set(
+        plan.days
+          .filter((d) => d.pool)
+          .flatMap((d) => d.pool!.main)
+          .map((s) => s.stroke)
+          .filter(Boolean),
+      );
+      expect(strokesUsed).toContain('breaststroke');
+    });
+
+    it('gives a stroke-appropriate technique drill for a stated primary stroke', () => {
+      const plan = generateWeekPlan(withProfile({ poolSessionsPerWeek: 7, goal: 'technique', primaryStrokes: ['butterfly'] }));
+      const techniqueDay = plan.days.find((d) => d.pool?.zone === 'technique')!;
+      const drillStep = techniqueDay.pool!.main.find((s) => s.kind === 'drill')!;
+      expect(drillStep.stroke).not.toBe('choice');
+    });
+
+    it('gives a sprint specialist shorter main-set reps than a distance specialist', () => {
+      const base = withProfile({ goal: 'endurance', poolSessionsPerWeek: 7, level: 'advanced' });
+      const sprintPlan = generateWeekPlan({ ...base, primaryDistances: [50] });
+      const distancePlan = generateWeekPlan({ ...base, primaryDistances: [1500] });
+      const sprintThreshold = sprintPlan.days.find((d) => d.pool?.zone === 'threshold')!.pool!.main[0];
+      const distanceThreshold = distancePlan.days.find((d) => d.pool?.zone === 'threshold')!.pool!.main[0];
+      expect(sprintThreshold.repDistance).toBeLessThan(distanceThreshold.repDistance);
+    });
+
+    it('gives a sprint specialist more rest than a distance specialist at the same zone', () => {
+      const base = withProfile({ goal: 'endurance', poolSessionsPerWeek: 7, level: 'advanced' });
+      const sprintPlan = generateWeekPlan({ ...base, primaryDistances: [50] });
+      const distancePlan = generateWeekPlan({ ...base, primaryDistances: [1500] });
+      const sprintThreshold = sprintPlan.days.find((d) => d.pool?.zone === 'threshold')!.pool!.main[0];
+      const distanceThreshold = distancePlan.days.find((d) => d.pool?.zone === 'threshold')!.pool!.main[0];
+      expect(sprintThreshold.restSec!).toBeGreaterThan(distanceThreshold.restSec!);
+    });
+
+    it.each([2, 3, 4, 5, 6, 7])(
+      'shows the primary stroke somewhere in the week for every week key at %i sessions/week',
+      (count) => {
+        // Regression test: stroke rotation used to be indexed by weekday, and several session
+        // counts (1/3/4/6) schedule only same-parity weekdays (e.g. 3/week = Mon/Wed/Fri, all
+        // even) — with a period-2 rotation that systematically hid the primary stroke from
+        // entire weeks depending on the week's hash offset. It's now indexed by the session's
+        // position within the week instead, which can't collide with weekday parity.
+        for (const weekKey of ['2026-W01', '2026-W02', '2026-W03', '2026-W04', '2026-W05', '2026-W06', '2026-W07']) {
+          const plan = generateWeekPlan(withProfile({ poolSessionsPerWeek: count, primaryStrokes: ['butterfly'] }), {
+            weekKey,
+          });
+          const strokesUsed = plan.days
+            .filter((d) => d.pool)
+            .flatMap((d) => d.pool!.main)
+            .map((s) => s.stroke);
+          expect(strokesUsed).toContain('butterfly');
+        }
+      },
+    );
+
+    it('still rounds specialty-scaled reps to a whole pool length', () => {
+      const plan = generateWeekPlan(
+        withProfile({ poolLength: 50, poolSessionsPerWeek: 7, level: 'advanced', primaryDistances: [50] }),
+      );
+      for (const day of plan.days) {
+        if (!day.pool) continue;
+        for (const step of day.pool.main) {
+          expect(step.repDistance % 50).toBe(0);
+        }
+      }
+    });
   });
 });
