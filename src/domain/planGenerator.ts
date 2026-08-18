@@ -1,5 +1,13 @@
-import { buildCooldown, buildGymSession, buildMainSet, buildWarmup, sessionVolumeM, ZONE_LABELS } from './workoutLibrary';
-import { AthleteProfile, DayPlan, Equipment, GymFocus, PoolSession, SwimGoal, WeekPlan, Zone } from './types';
+import {
+  basePace100Sec,
+  buildCooldown,
+  buildGymSession,
+  buildMainSet,
+  buildWarmup,
+  sessionVolumeM,
+  ZONE_LABELS,
+} from './workoutLibrary';
+import { AthleteProfile, DayPlan, Equipment, GymFocus, PaceBenchmark, PoolSession, SwimGoal, WeekPlan, Zone } from './types';
 
 export const DEFAULT_PROFILE: AthleteProfile = {
   level: 'intermediate',
@@ -60,14 +68,16 @@ function assemblePoolSession(
   durationMin: number,
   equipment: Equipment[],
   dayIndex: number,
+  benchmark?: PaceBenchmark,
 ): PoolSession {
-  const volume = sessionVolumeM(level, durationMin);
+  const volume = sessionVolumeM(level, durationMin, benchmark);
   const warmupMeters = round25(volume * 0.18);
   const cooldownMeters = round25(volume * 0.12);
   const mainMeters = Math.max(25, volume - warmupMeters - cooldownMeters);
 
+  const pace100Sec = benchmark ? basePace100Sec(benchmark) : undefined;
   const warmup = buildWarmup(warmupMeters, equipment, dayIndex);
-  const main = buildMainSet(zone, mainMeters, equipment, level, dayIndex);
+  const main = buildMainSet(zone, mainMeters, equipment, level, dayIndex, pace100Sec);
   const cooldown = buildCooldown(cooldownMeters);
 
   const allSteps = [...warmup, ...main, ...cooldown];
@@ -94,7 +104,14 @@ export function generateWeekPlan(profile: AthleteProfile): WeekPlan {
   const days: DayPlan[] = Array.from({ length: 7 }, (_, dayIndex) => ({ dayIndex }));
 
   poolDays.forEach((dayIndex, i) => {
-    days[dayIndex].pool = assemblePoolSession(zones[i], profile.level, profile.poolSessionDurationMin, profile.equipment, dayIndex);
+    days[dayIndex].pool = assemblePoolSession(
+      zones[i],
+      profile.level,
+      profile.poolSessionDurationMin,
+      profile.equipment,
+      dayIndex,
+      profile.benchmark,
+    );
   });
 
   const poolDaySet = new Set(poolDays);

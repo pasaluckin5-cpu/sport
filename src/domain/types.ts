@@ -53,6 +53,12 @@ export interface DayPlan {
   gym?: GymSession;
 }
 
+/** A recent time-trial result, e.g. "400m in 6:40", used to derive a real target pace. */
+export interface PaceBenchmark {
+  distanceM: number;
+  timeSec: number;
+}
+
 export interface AthleteProfile {
   level: AthleteLevel;
   goal: SwimGoal;
@@ -60,6 +66,8 @@ export interface AthleteProfile {
   poolSessionDurationMin: number; // minutes per pool session
   gymSessionsPerWeek: number; // 0-5
   equipment: Equipment[];
+  /** Optional — when present, session volume and set paces are derived from this instead of the level table. */
+  benchmark?: PaceBenchmark;
 }
 
 export interface WeekPlan {

@@ -10,6 +10,7 @@ import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { equipmentLabel } from '@/domain/equipment';
 import { DAY_NAMES, DayPlan, SetStep } from '@/domain/types';
+import { basePace100Sec, formatPace100 } from '@/domain/workoutLibrary';
 import { useTheme } from '@/hooks/use-theme';
 import { usePlan } from '@/state/plan-context';
 
@@ -133,6 +134,7 @@ export default function HomeScreen() {
             {poolSessions} pool session{poolSessions === 1 ? '' : 's'} ·{' '}
             {weekPlan.totalPoolDistanceM.toLocaleString()}m
             {gymSessions > 0 ? ` · ${gymSessions} gym session${gymSessions === 1 ? '' : 's'}` : ''}
+            {profile.benchmark ? ` · base pace ${formatPace100(basePace100Sec(profile.benchmark))}/100m` : ''}
           </ThemedText>
           <Pressable onPress={() => router.navigate('/profile')} style={({ pressed }) => pressed && styles.pressed}>
             <ThemedText type="link">Edit profile & regenerate</ThemedText>

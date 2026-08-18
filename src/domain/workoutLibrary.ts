@@ -1,14 +1,54 @@
-import { AthleteLevel, Equipment, GymBlock, GymFocus, SetStep, Zone } from './types';
+import { AthleteLevel, Equipment, GymBlock, GymFocus, PaceBenchmark, SetStep, Zone } from './types';
 
 /**
  * Rough continuous-swimming output per hour of pool time, by level. Used only to size
- * total session volume from a duration — not a real pace prediction.
+ * total session volume from a duration — not a real pace prediction. Superseded by a
+ * pace benchmark when the athlete provides one (see basePace100Sec/estimateMPerHour).
  */
 export const PACE_M_PER_HOUR: Record<AthleteLevel, number> = {
   beginner: 1800,
   intermediate: 2600,
   advanced: 3400,
 };
+
+/**
+ * A session's real swimming time is diluted by rest intervals, warmup/cooldown pacing,
+ * and turns — so "meters covered per hour" is well below a flat-out benchmark pace.
+ * This factor converts a raw time-trial pace into that realistic session-average pace.
+ */
+const SESSION_EFFECTIVE_PACE_FACTOR = 1.35;
+
+/** Target main-set pace per 100m, as a multiple of the athlete's base (threshold) pace. */
+const ZONE_PACE_FACTOR: Partial<Record<Zone, number>> = {
+  aerobicBase: 1.12,
+  threshold: 1.0,
+  vo2max: 0.93,
+};
+
+/** Seconds per 100m implied by a time-trial benchmark. */
+export function basePace100Sec(benchmark: PaceBenchmark): number {
+  return (benchmark.timeSec / benchmark.distanceM) * 100;
+}
+
+export function formatPace100(sec: number): string {
+  const rounded = Math.round(sec);
+  const min = Math.floor(rounded / 60);
+  const s = rounded % 60;
+  return `${min}:${s.toString().padStart(2, '0')}`;
+}
+
+function targetPaceSuffix(zone: Zone, pace100Sec: number | undefined, repDistanceM: number): string {
+  const factor = pace100Sec !== undefined ? ZONE_PACE_FACTOR[zone] : undefined;
+  if (factor === undefined) return '';
+  const repPaceSec = pace100Sec! * factor * (repDistanceM / 100);
+  return ` @ ${formatPace100(repPaceSec)}`;
+}
+
+export function estimateMPerHour(level: AthleteLevel, benchmark?: PaceBenchmark): number {
+  if (!benchmark) return PACE_M_PER_HOUR[level];
+  const effectivePace100 = basePace100Sec(benchmark) * SESSION_EFFECTIVE_PACE_FACTOR;
+  return (100 * 3600) / effectivePace100;
+}
 
 export const ZONE_LABELS: Record<Zone, string> = {
   recovery: 'Recovery',
@@ -42,8 +82,8 @@ function has(equipment: Equipment[], id: Equipment): boolean {
   return equipment.includes(id);
 }
 
-export function sessionVolumeM(level: AthleteLevel, durationMin: number): number {
-  return round25((PACE_M_PER_HOUR[level] * durationMin) / 60);
+export function sessionVolumeM(level: AthleteLevel, durationMin: number, benchmark?: PaceBenchmark): number {
+  return round25((estimateMPerHour(level, benchmark) * durationMin) / 60);
 }
 
 export function buildWarmup(meters: number, equipment: Equipment[], dayIndex: number): SetStep[] {
@@ -105,6 +145,7 @@ export function buildMainSet(
   equipment: Equipment[],
   level: AthleteLevel,
   dayIndex: number,
+  pace100Sec?: number,
 ): SetStep[] {
   const stroke = strokeFor(dayIndex);
   const steps: SetStep[] = [];
@@ -142,7 +183,13 @@ export function buildMainSet(
       const repDistance = level === 'beginner' ? 50 : level === 'intermediate' ? 100 : 150;
       const swimMeters = round25(meters * (has(equipment, 'kickboard') || has(equipment, 'fins') ? 0.75 : 1));
       steps.push(
-        repSet(`${stroke}, moderate steady pace, rest 15-20s`, fitReps(swimMeters, repDistance), repDistance, [], 'aerobicBase'),
+        repSet(
+          `${stroke}, moderate steady pace${targetPaceSuffix('aerobicBase', pace100Sec, repDistance)}, rest 15-20s`,
+          fitReps(swimMeters, repDistance),
+          repDistance,
+          [],
+          'aerobicBase',
+        ),
       );
       const kickMeters = round25(meters - swimMeters);
       if (kickMeters > 0) {
@@ -160,7 +207,7 @@ export function buildMainSet(
       const swimMeters = round25(meters - pullMeters);
       steps.push(
         repSet(
-          `${stroke}, best-sustainable ("threshold") pace, rest 10-15s`,
+          `${stroke}, best-sustainable ("threshold") pace${targetPaceSuffix('threshold', pace100Sec, repDistance)}, rest 10-15s`,
           fitReps(swimMeters, repDistance),
           repDistance,
           [],
@@ -177,7 +224,13 @@ export function buildMainSet(
     case 'vo2max': {
       const repDistance = level === 'beginner' ? 50 : 100;
       steps.push(
-        repSet(`${stroke}, hard effort (8-9/10), rest 20-30s`, fitReps(meters * 0.8, repDistance), repDistance, [], 'vo2max'),
+        repSet(
+          `${stroke}, hard effort (8-9/10)${targetPaceSuffix('vo2max', pace100Sec, repDistance)}, rest 20-30s`,
+          fitReps(meters * 0.8, repDistance),
+          repDistance,
+          [],
+          'vo2max',
+        ),
       );
       const remainder = round25(meters * 0.2);
       const kickEquip: Equipment[] = has(equipment, 'fins') ? ['fins'] : [];

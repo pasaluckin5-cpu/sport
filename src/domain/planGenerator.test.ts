@@ -73,4 +73,21 @@ describe('generateWeekPlan', () => {
     const expected = plan.days.reduce((sum, d) => sum + (d.pool?.totalDistanceM ?? 0), 0);
     expect(plan.totalPoolDistanceM).toBe(expected);
   });
+
+  it('annotates threshold main sets with a target pace when a benchmark is set', () => {
+    const plan = generateWeekPlan(
+      withProfile({ goal: 'endurance', poolSessionsPerWeek: 1, benchmark: { distanceM: 400, timeSec: 400 } }),
+    );
+    const session = plan.days.find((d) => d.pool)!.pool!;
+    expect(session.zone).toBe('aerobicBase');
+    const mainLabels = session.main.map((s) => s.label).join(' ');
+    expect(mainLabels).toMatch(/@ \d+:\d{2}/);
+  });
+
+  it('covers more distance for the same duration with a faster benchmark pace', () => {
+    const base = withProfile({ poolSessionsPerWeek: 1, poolSessionDurationMin: 60 });
+    const slow = generateWeekPlan({ ...base, benchmark: { distanceM: 400, timeSec: 480 } });
+    const fast = generateWeekPlan({ ...base, benchmark: { distanceM: 400, timeSec: 300 } });
+    expect(fast.totalPoolDistanceM).toBeGreaterThan(slow.totalPoolDistanceM);
+  });
 });

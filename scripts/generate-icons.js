@@ -1,0 +1,133 @@
+// Regenerates the app's icon/splash/favicon/adaptive-icon assets from a single hand-coded
+// SVG glyph (swimmer + waves), so the whole icon set can be tweaked by editing this file
+// and re-running `node scripts/generate-icons.js` instead of hand-editing PNGs.
+const sharp = require('sharp');
+const fs = require('fs');
+const path = require('path');
+
+const ASSETS_DIR = path.join(__dirname, '..', 'assets', 'images');
+
+const BG_TOP = '#063B7A';
+const BG_BOTTOM = '#12A9D6';
+const WHITE = '#FFFFFF';
+
+function swimmerGlyph({ color = WHITE, cx = 512, cy = 470, scale = 1, opacity = 1 } = {}) {
+  return `
+    <g transform="translate(${cx} ${cy}) scale(${scale}) translate(${-cx} ${-cy})"
+       stroke="${color}" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}">
+      <path d="M 660 468 Q 556 496 492 538 Q 424 578 322 584" stroke-width="52" />
+      <path d="M 660 468 Q 612 402 532 368" stroke-width="38" />
+      <circle cx="706" cy="436" r="46" fill="${color}" stroke="none" />
+    </g>
+  `;
+}
+
+// Full-bleed waves spanning the whole canvas width, used for the "hero" compositions
+// (main icon.png / favicon) where the art can safely touch the edges.
+function wideWaves({ color = WHITE, y = 680, opacities = [0.95, 0.5] } = {}) {
+  return opacities
+    .map((op, i) => {
+      const yy = y + i * 56;
+      return `<path d="M -20 ${yy} Q 137 ${yy - 42} 292 ${yy} T 604 ${yy} T 916 ${yy} T 1228 ${yy}" stroke="${color}" stroke-width="26" fill="none" stroke-linecap="round" opacity="${op}" />`;
+    })
+    .join('\n');
+}
+
+// Shorter waves that stay within a safe center zone, used for Android adaptive icon
+// layers (foreground/monochrome) which get cropped to a circle/squircle/rounded-square.
+function compactWaves({ color = WHITE, y = 620, opacities = [0.95, 0.5] } = {}) {
+  return opacities
+    .map((op, i) => {
+      const yy = y + i * 50;
+      return `<path d="M 150 ${yy} Q 260 ${yy - 34} 370 ${yy} T 590 ${yy} T 810 ${yy}" stroke="${color}" stroke-width="24" fill="none" stroke-linecap="round" opacity="${op}" />`;
+    })
+    .join('\n');
+}
+
+function heroSvg() {
+  return `
+  <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${BG_TOP}" />
+        <stop offset="1" stop-color="${BG_BOTTOM}" />
+      </linearGradient>
+    </defs>
+    <rect width="1024" height="1024" fill="url(#bg)" />
+    ${wideWaves({ y: 680 })}
+    ${swimmerGlyph({ cy: 420, scale: 1.12 })}
+  </svg>`;
+}
+
+function backgroundOnlySvg() {
+  return `
+  <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${BG_TOP}" />
+        <stop offset="1" stop-color="${BG_BOTTOM}" />
+      </linearGradient>
+    </defs>
+    <rect width="1024" height="1024" fill="url(#bg)" />
+  </svg>`;
+}
+
+// Compact glyph (swimmer + short wave), centered and sized to stay inside Android's
+// adaptive-icon safe zone (~66% of the canvas), and reused for the splash logomark.
+function compactGlyphSvg({ color = WHITE } = {}) {
+  return `
+  <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+    ${compactWaves({ color, y: 610 })}
+    ${swimmerGlyph({ color, cx: 512, cy: 430, scale: 0.72 })}
+  </svg>`;
+}
+
+async function run() {
+  fs.mkdirSync(ASSETS_DIR, { recursive: true });
+
+  // Main icon (opaque, full bleed) — used for android/web/expo default and as the iOS icon.
+  await sharp(Buffer.from(heroSvg()))
+    .resize(1024, 1024)
+    .flatten({ background: BG_TOP })
+    .png()
+    .toFile(path.join(ASSETS_DIR, 'icon.png'));
+
+  // Web favicon.
+  await sharp(Buffer.from(heroSvg()))
+    .resize(48, 48)
+    .flatten({ background: BG_TOP })
+    .png()
+    .toFile(path.join(ASSETS_DIR, 'favicon.png'));
+
+  // Splash logomark: transparent, just the compact glyph, shown on the app.json
+  // splash backgroundColor (#208AEF).
+  await sharp(Buffer.from(compactGlyphSvg()))
+    .resize(600, 600)
+    .png()
+    .toFile(path.join(ASSETS_DIR, 'splash-icon.png'));
+
+  // Android adaptive icon: background layer (flat gradient, no glyph).
+  await sharp(Buffer.from(backgroundOnlySvg()))
+    .resize(512, 512)
+    .png()
+    .toFile(path.join(ASSETS_DIR, 'android-icon-background.png'));
+
+  // Android adaptive icon: foreground layer (transparent, glyph only, safe-zone sized).
+  await sharp(Buffer.from(compactGlyphSvg()))
+    .resize(512, 512)
+    .png()
+    .toFile(path.join(ASSETS_DIR, 'android-icon-foreground.png'));
+
+  // Android adaptive icon: monochrome layer (white glyph, transparent bg).
+  await sharp(Buffer.from(compactGlyphSvg({ color: WHITE })))
+    .resize(432, 432)
+    .png()
+    .toFile(path.join(ASSETS_DIR, 'android-icon-monochrome.png'));
+
+  console.log('Wrote icon/splash/favicon/adaptive-icon assets to', ASSETS_DIR);
+}
+
+run().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
