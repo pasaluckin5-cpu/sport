@@ -34,6 +34,8 @@ export default {
     markDone_pool: 'Mark swim done',
     markDone_gym: 'Mark gym done',
     completed: 'Completed',
+    share: 'Share',
+    shareCopied: 'Copied — paste it wherever you like.',
     history: {
       title: 'History',
       empty: 'Completed sessions will show up here, grouped by week.',

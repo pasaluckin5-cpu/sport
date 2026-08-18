@@ -22,7 +22,7 @@ npm start            # expo start — dev server, press w/i/a to open a platform
 npm run web           # expo start --web
 npm run ios / android # expo start --ios / --android
 npm run lint           # eslint . (flat config in eslint.config.js, eslint-config-expo/flat)
-npm test               # vitest run — domain logic only, see below
+npm test               # vitest run — src/domain + src/i18n, see below
 npx vitest run src/domain/planGenerator.test.ts -t "some test name"   # single test
 npx tsc --noEmit                        # typecheck
 npx expo export --platform web          # production web bundle sanity check; output in dist/ (gitignored)
@@ -31,9 +31,13 @@ node scripts/generate-icons.js          # regenerate icon.png/favicon/splash/ada
 
 `expo lint`'s own auto-setup and `expo install`'s version-compatibility check both call out to
 a metadata service that this sandbox's proxy blocks ("HTTP Proxy Network Error: Forbidden").
-That's why ESLint is configured manually here (`eslint.config.js`) instead of via `expo lint`'s
-first-run wizard, and why new Expo-managed packages should be added with plain `npm install`
-rather than `npx expo install` in this environment.
+That's why `npm run lint` calls `eslint .` directly against a manually-written
+`eslint.config.js` rather than going through `expo lint`'s wrapper/first-run wizard, and why
+new Expo-managed packages should be added with plain `npm install` rather than `npx expo
+install` in this environment. CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, and
+the web export sanity check on every PR — it isn't hit by this sandbox's proxy restriction
+since it runs on GitHub's own runners, but it does need `expo-env.d.ts` regenerated first (see
+below) since that file is gitignored.
 
 `expo-env.d.ts` is gitignored and auto-generated (normally on first `expo start`); if it's
 missing and `tsc` complains about `*.css`/`*.module.css` imports, recreate it with a single
@@ -137,6 +141,14 @@ persisted "plan", so profile and plan can never drift out of sync. `LanguageProv
 copies the saved `AthleteProfile` as JSON to the clipboard (`expo-clipboard`) and restores it
 from pasted text via `src/domain/profileValidation.ts`'s `parseProfileBackup` — a real
 validation boundary (the pasted text is untrusted external input), not a trivial `JSON.parse`.
+**Sharing**: each day's `Collapsible` on the Plan tab has a "Share" action
+(`src/utils/share.ts`'s `shareOrCopy`) that opens the native share sheet on iOS/Android
+(`Share.share` from `react-native`) so an athlete can send a session to a coach or training
+partner via any installed app; react-native-web has no `Share` implementation, so on web (and
+if the native share sheet errors/is unavailable) it falls back to a clipboard copy instead. The
+shared text itself is built by `src/i18n/format.ts`'s `formatDayShareText`, reusing the same
+`formatSetStep`/`formatGymBlock` formatters the Plan screen renders with, so it's already
+localized and unit-aware.
 
 **Screens** (`src/app/`, expo-router, two tabs):
 - `index.tsx` — "Plan" tab. Empty state with a CTA into onboarding if no profile is saved yet;

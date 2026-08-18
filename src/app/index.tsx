@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,12 +10,13 @@ import { Collapsible } from '@/components/ui/collapsible';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { equipmentLabel } from '@/domain/equipment';
-import { DAY_KEYS, DayPlan } from '@/domain/types';
+import { DAY_KEYS, DayPlan, DistanceUnit } from '@/domain/types';
 import { basePace100Sec, formatPace100 } from '@/domain/workoutLibrary';
-import { formatGymBlock, formatSetStep, swimSessionTitle, unitAbbrev } from '@/i18n/format';
+import { formatDayShareText, formatGymBlock, formatSetStep, swimSessionTitle, unitAbbrev } from '@/i18n/format';
 import { useTheme } from '@/hooks/use-theme';
 import { SessionKind, useHistory } from '@/state/history-context';
 import { usePlan } from '@/state/plan-context';
+import { shareOrCopy } from '@/utils/share';
 
 function CompletionToggle({
   weekKey,
@@ -40,8 +41,9 @@ function CompletionToggle({
   );
 }
 
-function DayCard({ day, weekKey, unit }: { day: DayPlan; weekKey: string; unit: 'meters' | 'yards' }) {
+function DayCard({ day, weekKey, unit }: { day: DayPlan; weekKey: string; unit: DistanceUnit }) {
   const { t } = useTranslation();
+  const [shareState, setShareState] = useState<'shared' | 'copied' | null>(null);
   const abbrev = unitAbbrev(unit);
 
   const titleParts: string[] = [];
@@ -49,8 +51,26 @@ function DayCard({ day, weekKey, unit }: { day: DayPlan; weekKey: string; unit: 
   if (day.gym) titleParts.push(`${t(`gymFocus.${day.gym.focus}`)} · ${day.gym.durationMin}${t('common.min')}`);
   const title = titleParts.length > 0 ? titleParts.join(' + ') : t('plan.restDay');
 
+  async function handleShare() {
+    const dayName = t(`day.${DAY_KEYS[day.dayIndex]}`);
+    const result = await shareOrCopy(formatDayShareText(day, dayName, unit, t), t('common.appName'));
+    setShareState(result);
+  }
+
   return (
     <Collapsible title={`${t(`day.${DAY_KEYS[day.dayIndex]}`)} — ${title}`}>
+      {(day.pool || day.gym) && (
+        <View style={styles.sessionBlock}>
+          <Pressable onPress={handleShare} style={({ pressed }) => pressed && styles.pressed}>
+            <ThemedText type="link">{t('plan.share')}</ThemedText>
+          </Pressable>
+          {shareState === 'copied' && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('plan.shareCopied')}
+            </ThemedText>
+          )}
+        </View>
+      )}
       {day.pool && (
         <View style={styles.sessionBlock}>
           <CompletionToggle weekKey={weekKey} dayIndex={day.dayIndex} kind="pool" label={t('plan.markDone_pool')} />

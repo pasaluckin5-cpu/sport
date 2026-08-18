@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 
 import { formatPace100 } from '@/domain/workoutLibrary';
-import { DistanceUnit, GymBlock, SetStep, Zone } from '@/domain/types';
+import { DayPlan, DistanceUnit, GymBlock, SetStep, Zone } from '@/domain/types';
 
 /** "m"/"yd" — a universal abbreviation, not translated per-language. */
 export function unitAbbrev(unit: DistanceUnit): string {
@@ -42,4 +42,27 @@ export function zoneLabel(zone: Zone, t: TFunction): string {
 
 export function swimSessionTitle(zone: Zone, t: TFunction): string {
   return t('swimSession', { zone: zoneLabel(zone, t) });
+}
+
+/** Plain-text rendering of a day's session(s), for sharing with a coach or training partner. */
+export function formatDayShareText(day: DayPlan, dayName: string, unit: DistanceUnit, t: TFunction): string {
+  const lines: string[] = [`${t('common.appName')} — ${dayName}`];
+
+  if (day.pool) {
+    const abbrev = unitAbbrev(unit);
+    lines.push('', `${swimSessionTitle(day.pool.zone, t)} · ${day.pool.totalDistance}${abbrev}`);
+    (['warmup', 'main', 'cooldown'] as const).forEach((section) => {
+      const steps = day.pool![section];
+      if (steps.length === 0) return;
+      lines.push('', `${t(`plan.${section}`)}:`);
+      steps.forEach((step) => lines.push(`- ${formatSetStep(step, t, unit)}`));
+    });
+  }
+
+  if (day.gym) {
+    lines.push('', `${t(`gymFocus.${day.gym.focus}`)} · ${day.gym.durationMin}${t('common.min')}`);
+    day.gym.blocks.forEach((block) => lines.push(`- ${formatGymBlock(block, t)}`));
+  }
+
+  return lines.join('\n');
 }
