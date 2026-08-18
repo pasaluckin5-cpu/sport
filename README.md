@@ -103,9 +103,21 @@ nothing. The policy text lives in two places, kept in sync by hand:
 - In-app: the "Privacy policy" section at the bottom of the Profile screen (translated).
 - Standalone: `docs/privacy-policy.html` (bilingual EN/RU in one static page).
 
-To get a public URL for App Store Connect / Play Console, enable GitHub Pages on this repo:
-**Settings → Pages → Source: Deploy from a branch → Branch: main, folder: /docs**. The policy
-will then be live at `https://<your-username>.github.io/<repo>/privacy-policy.html`.
+To get a public URL for App Store Connect / Play Console — and a way to try the live app itself
+in a real browser, including sign-up against your Supabase project, which needs real outbound
+network access — `.github/workflows/deploy-pages.yml` builds the web export on every push to
+`main` and publishes it to GitHub Pages:
+
+1. **Settings → Pages → Source: GitHub Actions** (one-time, replaces the older
+   "deploy from a branch" setup).
+2. Optional, to test cloud accounts on the deployed site: **Settings → Secrets and variables →
+   Actions → Variables** → add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+   (the same values from `.env` — these aren't secrets, see `docs/supabase-architecture.md`, so
+   plain repo *variables* are fine, no need for *secrets*). Without them the deployed site just
+   runs in local-only mode, same as a build with no `.env`.
+3. Push to `main` (or run the workflow manually from the Actions tab) — the site appears at
+   `https://<your-username>.github.io/<repo>/`, and the privacy policy at
+   `https://<your-username>.github.io/<repo>/privacy-policy.html`.
 
 ### Store listing copy
 

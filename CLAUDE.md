@@ -364,7 +364,19 @@ none of which can be done from here since they need the user's own Apple/Google/
 credentials. `docs/privacy-policy.html` (standalone, bilingual) and `docs/store-listing.md`
 (draft App Store/Play copy in English and Russian, plus `docs/screenshots/`) exist so those are
 ready to go once there's a build to submit; both are referenced from README's Publishing
-section, including how to get a public URL for the privacy policy via GitHub Pages.
+section.
+
+**GitHub Pages deploy**: `.github/workflows/deploy-pages.yml` builds the web export and
+publishes it to GitHub Pages on every push to `main` (and on manual dispatch), bundling
+`docs/privacy-policy.html` alongside it — this is also the practical way to get real Auth/RLS
+testing against a configured Supabase project: this sandbox's outbound network is policy-blocked
+for arbitrary hosts (confirmed for `*.supabase.co` specifically — a 403 at the proxy, not an app
+bug), so a real Supabase round-trip has to happen from an actual browser outside this sandbox,
+and a deployed Pages URL is the simplest way to get one. `EXPO_PUBLIC_SUPABASE_URL`/
+`EXPO_PUBLIC_SUPABASE_ANON_KEY` are read from repository *variables* (not secrets — see
+`docs/supabase-architecture.md`'s note on the anon key) at build time, since Expo inlines
+`EXPO_PUBLIC_*` vars into the bundle rather than reading them at runtime; without them set the
+deployed build just runs in local-only mode, same as any build with no `.env`.
 
 ## Runtime verification in this sandbox
 

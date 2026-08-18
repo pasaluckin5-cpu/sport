@@ -1,0 +1,70 @@
+name: Deploy web build to GitHub Pages
+
+# Builds the Expo web export and publishes it to GitHub Pages, giving a public URL that runs
+# outside any sandboxed development environment — needed to test real network calls (Supabase
+# sign-up/sign-in, RLS-protected data) against an actual Supabase project.
+#
+# One-time setup required in the repo (Settings → Pages → Source: "GitHub Actions"), plus two
+# repository variables/secrets so the build has real Supabase credentials to bake in (Expo's
+# EXPO_PUBLIC_* env vars are inlined at build time, not read at runtime):
+#   Settings → Secrets and variables → Actions → Variables (not secret, these are safe to expose
+#   — see docs/supabase-architecture.md's note on the anon key not being a secret):
+#     EXPO_PUBLIC_SUPABASE_URL       = https://<your-project-ref>.supabase.co
+#     EXPO_PUBLIC_SUPABASE_ANON_KEY  = <your anon/publishable key>
+# Without these set, the site still builds and deploys fine — it just falls back to fully local
+# mode (Account section shows "not configured"), same as any build without a .env.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate expo-env.d.ts
+        run: echo '/// <reference types="expo/types" />' > expo-env.d.ts
+
+      - name: Export static web build
+        run: npx expo export --platform web
+
+      - name: Include the privacy policy in the deployed site
+        run: cp docs/privacy-policy.html dist/privacy-policy.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
