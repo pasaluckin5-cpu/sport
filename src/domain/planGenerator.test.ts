@@ -14,7 +14,7 @@ describe('generateWeekPlan', () => {
     expect(plan.days.map((d) => d.dayIndex)).toEqual([0, 1, 2, 3, 4, 5, 6]);
   });
 
-  it.each([1, 2, 3, 4, 5, 6, 7])('schedules exactly %i pool sessions when requested', (count) => {
+  it.each([0, 1, 2, 3, 4, 5, 6, 7])('schedules exactly %i pool sessions when requested', (count) => {
     const plan = generateWeekPlan(withProfile({ poolSessionsPerWeek: count }));
     const poolDays = plan.days.filter((d) => d.pool);
     expect(poolDays).toHaveLength(count);
@@ -125,5 +125,54 @@ describe('generateWeekPlan', () => {
         .join(',');
     });
     expect(new Set(zoneSequences).size).toBeGreaterThan(1);
+  });
+
+  describe('gym-only profiles (zero pool sessions)', () => {
+    it('produces no pool sessions and no swim distance', () => {
+      const plan = generateWeekPlan(withProfile({ poolSessionsPerWeek: 0, gymSessionsPerWeek: 4 }));
+      expect(plan.days.every((d) => !d.pool)).toBe(true);
+      expect(plan.totalPoolDistance).toBe(0);
+    });
+
+    it('spreads gym days evenly across the week rather than clustering them', () => {
+      const plan = generateWeekPlan(withProfile({ poolSessionsPerWeek: 0, gymSessionsPerWeek: 3 }));
+      const gymDayIndices = plan.days.filter((d) => d.gym).map((d) => d.dayIndex);
+      expect(gymDayIndices).toEqual([0, 2, 4]); // Mon/Wed/Fri, same spread as 3 pool sessions/week
+    });
+
+    it('uses the general-fitness catalog with no swim-benefit tags', () => {
+      const plan = generateWeekPlan(withProfile({ poolSessionsPerWeek: 0, gymSessionsPerWeek: 5 }));
+      for (const day of plan.days) {
+        if (!day.gym) continue;
+        expect(day.gym.mode).toBe('generalFitness');
+        for (const block of day.gym.blocks) {
+          expect(block.benefit).toBeUndefined();
+        }
+      }
+    });
+  });
+
+  describe('swim dryland gym mode (at least one pool session)', () => {
+    it('tags every dryland exercise with a swim benefit', () => {
+      const plan = generateWeekPlan(withProfile({ poolSessionsPerWeek: 3, gymSessionsPerWeek: 5 }));
+      const gymDays = plan.days.filter((d) => d.gym);
+      expect(gymDays.length).toBeGreaterThan(0);
+      for (const day of gymDays) {
+        expect(day.gym!.mode).toBe('swimDryland');
+        for (const block of day.gym!.blocks) {
+          if (block.exercise === 'conditioningFinisher') continue;
+          expect(block.benefit).toBeDefined();
+        }
+      }
+    });
+  });
+
+  it("gives a 'speed' goal's single gym day a power focus, and 'technique's a mobility/core focus", () => {
+    const speedPlan = generateWeekPlan(withProfile({ goal: 'speed', poolSessionsPerWeek: 3, gymSessionsPerWeek: 1 }));
+    const techniquePlan = generateWeekPlan(
+      withProfile({ goal: 'technique', poolSessionsPerWeek: 3, gymSessionsPerWeek: 1 }),
+    );
+    expect(speedPlan.days.find((d) => d.gym)!.gym!.focus).toBe('lowerBody');
+    expect(techniquePlan.days.find((d) => d.gym)!.gym!.focus).toBe('mobility');
   });
 });

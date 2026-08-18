@@ -1,6 +1,11 @@
 export type AthleteLevel = 'beginner' | 'intermediate' | 'advanced';
 
-export type SwimGoal = 'fitness' | 'endurance' | 'speed' | 'technique';
+/**
+ * Applies to both swim training and gym-only training (see `AthleteProfile.poolSessionsPerWeek`)
+ * — for a gym-only athlete "technique" means movement quality/mobility-focused work rather than
+ * stroke technique.
+ */
+export type TrainingGoal = 'fitness' | 'endurance' | 'speed' | 'technique';
 
 export type Equipment =
   | 'fins'
@@ -69,6 +74,15 @@ export interface PoolSession {
 
 export type GymFocus = 'fullBody' | 'upperBody' | 'lowerBody' | 'core' | 'mobility';
 
+/** Which gym exercise catalog to draw from — see workoutLibrary.ts's two catalogs. */
+export type GymMode = 'swimDryland' | 'generalFitness';
+
+/**
+ * What a swim-dryland exercise is actually *for*, shown to the athlete so the gym work reads
+ * as connected to their swimming rather than a generic add-on. Only set in `'swimDryland'` mode.
+ */
+export type SwimBenefit = 'shoulderHealth' | 'pullStrength' | 'kickPower' | 'corePower' | 'explosiveStart' | 'mobility';
+
 export type GymExercise =
   | 'squats'
   | 'pushUps'
@@ -88,18 +102,29 @@ export type GymExercise =
   | 'worldsGreatestStretch'
   | 'thoracicRotations'
   | 'ankleMobility'
-  | 'conditioningFinisher';
+  | 'conditioningFinisher'
+  | 'yTWRaises'
+  | 'pushUpPlus'
+  | 'medBallRotationalThrow'
+  | 'squatJump'
+  | 'bulgarianSplitSquat'
+  | 'hipThrust'
+  | 'sidePlankReach'
+  | 'hip9090Mobility';
 
 export interface GymBlock {
   exercise: GymExercise;
   sets: number;
   /** Language-neutral reps/time notation, e.g. "10-12", "max", "30-45s". */
   reps: string;
+  /** Only set in `'swimDryland'` mode — which swim quality this exercise supports. */
+  benefit?: SwimBenefit;
 }
 
 export interface GymSession {
   durationMin: number;
   focus: GymFocus;
+  mode: GymMode;
   blocks: GymBlock[];
 }
 
@@ -119,10 +144,11 @@ export interface PaceBenchmark {
 
 export interface AthleteProfile {
   level: AthleteLevel;
-  goal: SwimGoal;
-  poolSessionsPerWeek: number; // 1-7
+  goal: TrainingGoal;
+  /** 0-7. Zero means "no pool training" — a gym/fitness-only plan (see GymMode). */
+  poolSessionsPerWeek: number;
   poolSessionDurationMin: number; // minutes per pool session
-  gymSessionsPerWeek: number; // 0-5
+  gymSessionsPerWeek: number; // 0-7
   equipment: Equipment[];
   unit: DistanceUnit;
   poolLength: PoolLength;

@@ -1,12 +1,17 @@
 # Swim Planner
 
-An Expo (React Native + web) app that generates a personalized weekly swim training plan.
+An Expo (React Native + web) app that generates a personalized weekly training plan for
+swimmers — or, if you don't swim, a standalone gym/fitness plan.
 
 It takes into account:
 - Your level and main goal (fitness, endurance, speed, technique)
-- How many pool sessions per week you want, and how long each one is
-- Optional strength/gym sessions per week, coordinated with pool days so a heavy leg day
-  doesn't land right before a hard kick/sprint swim
+- How many pool sessions per week you want, and how long each one is — set this to **0** and
+  the app switches entirely to a gym/fitness-only plan for people who just go to the gym
+- Optional strength/gym sessions per week. If you swim, these are swim-specific dryland
+  exercises — shoulder-health/rotator-cuff work, pulling strength, explosive starts-and-turns
+  power, kick-range mobility, rotational core control — each one labeled with what it's actually
+  for, and coordinated with pool days so a heavy leg day doesn't land right before a hard
+  kick/sprint swim. If you don't swim, it's a standard general-fitness split instead.
 - Meters or yards, and your pool length (25 or 50) — every set is a whole number of pool lengths
 - The equipment you actually own (fins, paddles, pull buoy, kickboard, snorkel, parachute,
   tempo trainer, ankle band) — sets only call for gear you have

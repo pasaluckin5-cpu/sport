@@ -15,7 +15,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { EQUIPMENT_CATALOG, equipmentLabel } from '@/domain/equipment';
 import { DEFAULT_PROFILE } from '@/domain/planGenerator';
 import { parseProfileBackup } from '@/domain/profileValidation';
-import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, PoolLength, SwimGoal } from '@/domain/types';
+import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, PoolLength, TrainingGoal } from '@/domain/types';
 import { unitAbbrev } from '@/i18n/format';
 import { AppLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
 import { useTheme } from '@/hooks/use-theme';
@@ -23,7 +23,7 @@ import { useLanguage } from '@/state/language-context';
 import { usePlan } from '@/state/plan-context';
 
 const LEVELS: AthleteLevel[] = ['beginner', 'intermediate', 'advanced'];
-const GOALS: SwimGoal[] = ['fitness', 'endurance', 'speed', 'technique'];
+const GOALS: TrainingGoal[] = ['fitness', 'endurance', 'speed', 'technique'];
 const UNITS: DistanceUnit[] = ['meters', 'yards'];
 const POOL_LENGTHS: PoolLength[] = [25, 50];
 const BENCHMARK_DISTANCES = [100, 200, 400, 1000];
@@ -92,11 +92,19 @@ function ProfileForm() {
     }));
   }
 
+  const isSwimming = form.poolSessionsPerWeek > 0;
+
   async function handleSave() {
     // A benchmark with no time set yet isn't a real pace — drop it rather than saving
     // a 0-second time trial that would divide out to a nonsense pace.
     const benchmark = form.benchmark && form.benchmark.timeSec > 0 ? form.benchmark : undefined;
-    await updateProfile({ ...form, benchmark });
+    // Zero pool sessions and zero gym sessions would be an entirely empty week — nudge to a
+    // sane gym-only default rather than silently generating a week of nothing but rest days.
+    const gymSessionsPerWeek =
+      form.poolSessionsPerWeek === 0 && form.gymSessionsPerWeek === 0 ? 3 : form.gymSessionsPerWeek;
+    const finalProfile = { ...form, benchmark, gymSessionsPerWeek };
+    await updateProfile(finalProfile);
+    setForm(finalProfile);
     setSaved(true);
     router.navigate('/');
   }
@@ -173,123 +181,137 @@ function ProfileForm() {
             />
           </FormSection>
 
-          <FormSection label={t('profile.section.units')}>
-            <ChipGroup
-              options={UNITS.map((value) => ({ value, label: t(`profile.unit.${value}`) }))}
-              selected={[form.unit]}
-              onToggle={(value) => {
-                setSaved(false);
-                setForm((f) => ({ ...f, unit: value }));
-              }}
-            />
-            <ChipGroup
-              options={POOL_LENGTHS.map((value) => ({
-                value: String(value) as '25' | '50',
-                label: t('profile.poolLength', { length: value, unit: unitAbbrev(form.unit) }),
-              }))}
-              selected={[String(form.poolLength) as '25' | '50']}
-              onToggle={(value) => {
-                setSaved(false);
-                setForm((f) => ({ ...f, poolLength: Number(value) as PoolLength }));
-              }}
-            />
-          </FormSection>
-
           <FormSection label={t('profile.section.poolSessionsPerWeek')}>
             <Stepper
               value={form.poolSessionsPerWeek}
-              min={1}
+              min={0}
               max={7}
               onChange={(v) => {
                 setSaved(false);
                 setForm((f) => ({ ...f, poolSessionsPerWeek: v }));
               }}
             />
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('profile.poolSessionsHint')}
+            </ThemedText>
           </FormSection>
 
-          <FormSection label={t('profile.section.poolSessionLength')}>
-            <Stepper
-              value={form.poolSessionDurationMin}
-              min={30}
-              max={120}
-              step={15}
-              suffix={t('common.min')}
-              onChange={(v) => {
-                setSaved(false);
-                setForm((f) => ({ ...f, poolSessionDurationMin: v }));
-              }}
-            />
-          </FormSection>
+          {isSwimming && (
+            <FormSection label={t('profile.section.units')}>
+              <ChipGroup
+                options={UNITS.map((value) => ({ value, label: t(`profile.unit.${value}`) }))}
+                selected={[form.unit]}
+                onToggle={(value) => {
+                  setSaved(false);
+                  setForm((f) => ({ ...f, unit: value }));
+                }}
+              />
+              <ChipGroup
+                options={POOL_LENGTHS.map((value) => ({
+                  value: String(value) as '25' | '50',
+                  label: t('profile.poolLength', { length: value, unit: unitAbbrev(form.unit) }),
+                }))}
+                selected={[String(form.poolLength) as '25' | '50']}
+                onToggle={(value) => {
+                  setSaved(false);
+                  setForm((f) => ({ ...f, poolLength: Number(value) as PoolLength }));
+                }}
+              />
+            </FormSection>
+          )}
+
+          {isSwimming && (
+            <FormSection label={t('profile.section.poolSessionLength')}>
+              <Stepper
+                value={form.poolSessionDurationMin}
+                min={30}
+                max={120}
+                step={15}
+                suffix={t('common.min')}
+                onChange={(v) => {
+                  setSaved(false);
+                  setForm((f) => ({ ...f, poolSessionDurationMin: v }));
+                }}
+              />
+            </FormSection>
+          )}
 
           <FormSection label={t('profile.section.gymSessionsPerWeek')}>
             <Stepper
               value={form.gymSessionsPerWeek}
               min={0}
-              max={5}
+              max={7}
               onChange={(v) => {
                 setSaved(false);
                 setForm((f) => ({ ...f, gymSessionsPerWeek: v }));
               }}
             />
-          </FormSection>
-
-          <FormSection label={t('profile.section.equipment')}>
-            <ChipGroup
-              options={EQUIPMENT_CATALOG.map((e) => ({ value: e.id, label: `${e.emoji} ${equipmentLabel(e.id, t)}` }))}
-              selected={form.equipment}
-              onToggle={toggleEquipment}
-            />
-          </FormSection>
-
-          <FormSection label={t('profile.section.benchmark')}>
             <ThemedText type="small" themeColor="textSecondary">
-              {t('profile.benchmark.hint')}
+              {t(isSwimming ? 'profile.gymHint.swim' : 'profile.gymHint.general')}
             </ThemedText>
-            <ChipGroup
-              options={BENCHMARK_DISTANCES.map((value) => ({
-                value: String(value) as '100' | '200' | '400' | '1000',
-                label: `${value}${unitAbbrev(form.unit)}`,
-              }))}
-              selected={form.benchmark ? [String(form.benchmark.distance) as '100' | '200' | '400' | '1000'] : []}
-              onToggle={(value) => {
-                setSaved(false);
-                setForm((f) => ({
-                  ...f,
-                  benchmark: { distance: Number(value), timeSec: f.benchmark?.timeSec ?? 0 },
-                }));
-              }}
-            />
-            <ThemedView style={styles.timeRow}>
-              <ThemedView style={styles.timeField}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {t('common.min')}
-                </ThemedText>
-                <Stepper value={benchmarkMin} min={0} max={30} onChange={(v) => setBenchmarkTime(v, benchmarkSec)} />
-              </ThemedView>
-              <ThemedView style={styles.timeField}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {t('common.sec')}
-                </ThemedText>
-                <Stepper
-                  value={benchmarkSec}
-                  min={0}
-                  max={55}
-                  step={5}
-                  onChange={(v) => setBenchmarkTime(benchmarkMin, v)}
-                />
-              </ThemedView>
-            </ThemedView>
-            {form.benchmark && (
-              <Pressable
-                onPress={() => {
-                  setSaved(false);
-                  setForm((f) => ({ ...f, benchmark: undefined }));
-                }}
-                style={({ pressed }) => pressed && styles.pressed}>
-                <ThemedText type="link">{t('common.clear')}</ThemedText>
-              </Pressable>
-            )}
           </FormSection>
+
+          {isSwimming && (
+            <FormSection label={t('profile.section.equipment')}>
+              <ChipGroup
+                options={EQUIPMENT_CATALOG.map((e) => ({ value: e.id, label: `${e.emoji} ${equipmentLabel(e.id, t)}` }))}
+                selected={form.equipment}
+                onToggle={toggleEquipment}
+              />
+            </FormSection>
+          )}
+
+          {isSwimming && (
+            <FormSection label={t('profile.section.benchmark')}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('profile.benchmark.hint')}
+              </ThemedText>
+              <ChipGroup
+                options={BENCHMARK_DISTANCES.map((value) => ({
+                  value: String(value) as '100' | '200' | '400' | '1000',
+                  label: `${value}${unitAbbrev(form.unit)}`,
+                }))}
+                selected={form.benchmark ? [String(form.benchmark.distance) as '100' | '200' | '400' | '1000'] : []}
+                onToggle={(value) => {
+                  setSaved(false);
+                  setForm((f) => ({
+                    ...f,
+                    benchmark: { distance: Number(value), timeSec: f.benchmark?.timeSec ?? 0 },
+                  }));
+                }}
+              />
+              <ThemedView style={styles.timeRow}>
+                <ThemedView style={styles.timeField}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {t('common.min')}
+                  </ThemedText>
+                  <Stepper value={benchmarkMin} min={0} max={30} onChange={(v) => setBenchmarkTime(v, benchmarkSec)} />
+                </ThemedView>
+                <ThemedView style={styles.timeField}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {t('common.sec')}
+                  </ThemedText>
+                  <Stepper
+                    value={benchmarkSec}
+                    min={0}
+                    max={55}
+                    step={5}
+                    onChange={(v) => setBenchmarkTime(benchmarkMin, v)}
+                  />
+                </ThemedView>
+              </ThemedView>
+              {form.benchmark && (
+                <Pressable
+                  onPress={() => {
+                    setSaved(false);
+                    setForm((f) => ({ ...f, benchmark: undefined }));
+                  }}
+                  style={({ pressed }) => pressed && styles.pressed}>
+                  <ThemedText type="link">{t('common.clear')}</ThemedText>
+                </Pressable>
+              )}
+            </FormSection>
+          )}
 
           {profile && (
             <FormSection label={t('profile.section.backup')}>

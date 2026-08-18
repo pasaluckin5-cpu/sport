@@ -1,7 +1,7 @@
-import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, PoolLength, SwimGoal } from './types';
+import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, PoolLength, TrainingGoal } from './types';
 
 const LEVELS: AthleteLevel[] = ['beginner', 'intermediate', 'advanced'];
-const GOALS: SwimGoal[] = ['fitness', 'endurance', 'speed', 'technique'];
+const GOALS: TrainingGoal[] = ['fitness', 'endurance', 'speed', 'technique'];
 const UNITS: DistanceUnit[] = ['meters', 'yards'];
 const POOL_LENGTHS: PoolLength[] = [25, 50];
 const EQUIPMENT_IDS: Equipment[] = ['fins', 'paddles', 'pullBuoy', 'kickboard', 'snorkel', 'parachute', 'tempoTrainer', 'band'];
@@ -18,7 +18,7 @@ export function parseProfileBackup(text: string): AthleteProfile | null {
   const d = data as Record<string, unknown>;
 
   if (!LEVELS.includes(d.level as AthleteLevel)) return null;
-  if (!GOALS.includes(d.goal as SwimGoal)) return null;
+  if (!GOALS.includes(d.goal as TrainingGoal)) return null;
   if (typeof d.poolSessionsPerWeek !== 'number') return null;
   if (typeof d.poolSessionDurationMin !== 'number') return null;
   if (typeof d.gymSessionsPerWeek !== 'number') return null;
@@ -37,7 +37,7 @@ export function parseProfileBackup(text: string): AthleteProfile | null {
 
   return {
     level: d.level as AthleteLevel,
-    goal: d.goal as SwimGoal,
+    goal: d.goal as TrainingGoal,
     poolSessionsPerWeek: d.poolSessionsPerWeek as number,
     poolSessionDurationMin: d.poolSessionDurationMin as number,
     gymSessionsPerWeek: d.gymSessionsPerWeek as number,

@@ -7,7 +7,7 @@ import {
   roundToPoolLength,
   sessionVolume,
 } from './workoutLibrary';
-import { AthleteProfile, DayPlan, GymFocus, PoolSession, SwimGoal, WeekPlan, Zone } from './types';
+import { AthleteProfile, DayPlan, GymFocus, GymMode, PoolSession, TrainingGoal, WeekPlan, Zone } from './types';
 import { isoWeekKey, rotateArray, weekKeyToOffset } from './week';
 
 export const DEFAULT_PROFILE: AthleteProfile = {
@@ -21,8 +21,12 @@ export const DEFAULT_PROFILE: AthleteProfile = {
   poolLength: 25,
 };
 
-/** Which days (0=Mon..6=Sun) get a pool session, for each weekly session count. */
+/**
+ * Which days (0=Mon..6=Sun) get a pool session, for each weekly session count. Also reused to
+ * evenly space gym days across the week for a gym-only (zero pool sessions) profile.
+ */
 const POOL_DAY_PATTERNS: Record<number, number[]> = {
+  0: [],
   1: [2],
   2: [1, 4],
   3: [0, 2, 4],
@@ -38,7 +42,7 @@ const POOL_DAY_PATTERNS: Record<number, number[]> = {
  * is rotated by a week-derived offset so the plan varies from week to week instead of being
  * identical every time (see src/domain/week.ts).
  */
-const ZONE_ROTATION_BY_GOAL: Record<SwimGoal, Zone[]> = {
+const ZONE_ROTATION_BY_GOAL: Record<TrainingGoal, Zone[]> = {
   fitness: ['aerobicBase', 'technique', 'threshold', 'aerobicBase', 'recovery', 'aerobicBase', 'technique'],
   endurance: ['aerobicBase', 'threshold', 'aerobicBase', 'threshold', 'recovery', 'aerobicBase', 'technique'],
   speed: ['sprint', 'technique', 'vo2max', 'aerobicBase', 'sprint', 'recovery', 'vo2max'],
@@ -47,7 +51,18 @@ const ZONE_ROTATION_BY_GOAL: Record<SwimGoal, Zone[]> = {
 
 const HARD_ZONES: Zone[] = ['threshold', 'vo2max', 'sprint'];
 
-const GYM_FOCUS_ROTATION: GymFocus[] = ['fullBody', 'upperBody', 'core', 'lowerBody', 'mobility'];
+/**
+ * Which gym focus comes first (and so is favored when there are fewer gym sessions than
+ * focuses) per goal — e.g. a "speed" goal front-loads explosive lower-body/full-body power,
+ * while "technique" front-loads mobility/core (movement quality, and for swimmers the
+ * shoulder/rotational work that most directly carries over to stroke technique).
+ */
+const GYM_FOCUS_ROTATION_BY_GOAL: Record<TrainingGoal, GymFocus[]> = {
+  fitness: ['fullBody', 'upperBody', 'core', 'lowerBody', 'mobility'],
+  endurance: ['fullBody', 'core', 'upperBody', 'mobility', 'lowerBody'],
+  speed: ['lowerBody', 'fullBody', 'upperBody', 'core', 'mobility'],
+  technique: ['mobility', 'core', 'upperBody', 'fullBody', 'lowerBody'],
+};
 
 const DEFAULT_GYM_DURATION_MIN = 45;
 
@@ -95,8 +110,12 @@ export interface GenerateWeekPlanOptions {
 export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekPlanOptions = {}): WeekPlan {
   const weekKey = options.weekKey ?? isoWeekKey(new Date());
 
-  const poolCount = clamp(profile.poolSessionsPerWeek, 1, 7);
-  const poolDays = POOL_DAY_PATTERNS[poolCount] ?? POOL_DAY_PATTERNS[3];
+  const poolCount = clamp(profile.poolSessionsPerWeek, 0, 7);
+  const poolDays = poolCount === 0 ? [] : (POOL_DAY_PATTERNS[poolCount] ?? POOL_DAY_PATTERNS[3]);
+  // Zero pool sessions means a gym/fitness-only profile: dryland exercises chosen for a swim
+  // payoff don't make sense with no swimming to carry over to, so fall back to a standard
+  // general-fitness split instead.
+  const gymMode: GymMode = poolCount > 0 ? 'swimDryland' : 'generalFitness';
 
   const zoneRotation = ZONE_ROTATION_BY_GOAL[profile.goal];
   const zoneOffset = weekKeyToOffset(weekKey, zoneRotation.length);
@@ -109,20 +128,29 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
     days[dayIndex].pool = assemblePoolSession(zones[i], profile, dayIndex, strokeOffset);
   });
 
-  const poolDaySet = new Set(poolDays);
-  const restDays = days.map((d) => d.dayIndex).filter((d) => !poolDaySet.has(d));
-  // Prefer placing gym sessions on days without a pool session; only stack on pool days
-  // once every rest day is used.
-  const gymDayCandidates = [...restDays, ...poolDays];
-
   const gymCount = clamp(profile.gymSessionsPerWeek, 0, 7);
-  const gymFocusOffset = weekKeyToOffset(`${weekKey}:gym`, GYM_FOCUS_ROTATION.length);
+  let gymDayCandidates: number[];
+  if (poolCount === 0) {
+    // No pool days to work around — just spread gym days evenly across the week.
+    gymDayCandidates = POOL_DAY_PATTERNS[clamp(gymCount, 1, 7)] ?? POOL_DAY_PATTERNS[3];
+  } else {
+    const poolDaySet = new Set(poolDays);
+    const restDays = days.map((d) => d.dayIndex).filter((d) => !poolDaySet.has(d));
+    // Prefer placing gym sessions on days without a pool session; only stack on pool days
+    // once every rest day is used.
+    gymDayCandidates = [...restDays, ...poolDays];
+  }
+
+  // Not week-rotated (unlike the swim zone/stroke rotations above): the goal should
+  // consistently shape the gym split every week, not just some weeks — weekly variety already
+  // comes from the swim side (and from which exact days gym lands on as gymCount changes).
+  const gymFocusRotation = GYM_FOCUS_ROTATION_BY_GOAL[profile.goal];
   for (let i = 0; i < gymCount && i < gymDayCandidates.length; i++) {
     const dayIndex = gymDayCandidates[i];
     const nextDayPool = days[(dayIndex + 1) % 7].pool;
     const followedByHardSwim = !!nextDayPool && HARD_ZONES.includes(nextDayPool.zone);
 
-    let focus = GYM_FOCUS_ROTATION[(i + gymFocusOffset) % GYM_FOCUS_ROTATION.length];
+    let focus = gymFocusRotation[i % gymFocusRotation.length];
     if (followedByHardSwim && focus === 'lowerBody') {
       // Avoid pre-fatiguing the legs the day before a hard kick/sprint-heavy swim.
       focus = 'core';
@@ -131,7 +159,8 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
     days[dayIndex].gym = {
       durationMin: DEFAULT_GYM_DURATION_MIN,
       focus,
-      blocks: buildGymSession(focus, DEFAULT_GYM_DURATION_MIN, profile.level),
+      mode: gymMode,
+      blocks: buildGymSession(focus, DEFAULT_GYM_DURATION_MIN, profile.level, gymMode),
     };
   }
 

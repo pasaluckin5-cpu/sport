@@ -5,6 +5,7 @@ import {
   GymBlock,
   GymExercise,
   GymFocus,
+  GymMode,
   PaceBenchmark,
   PoolLength,
   SetStep,
@@ -281,7 +282,11 @@ export function buildMainSet(
   return steps;
 }
 
-const GYM_EXERCISES: Record<GymFocus, GymBlock[]> = {
+/**
+ * Standard, general-purpose gym/fitness split — used for an athlete with zero pool sessions
+ * (`GymMode: 'generalFitness'`). No swim connection implied.
+ */
+const GENERAL_FITNESS_EXERCISES: Record<GymFocus, GymBlock[]> = {
   fullBody: [
     { exercise: 'squats', sets: 3, reps: '10-12' },
     { exercise: 'pushUps', sets: 3, reps: 'max' },
@@ -314,8 +319,50 @@ const GYM_EXERCISES: Record<GymFocus, GymBlock[]> = {
   ],
 };
 
-export function buildGymSession(focus: GymFocus, durationMin: number, level: AthleteLevel): GymBlock[] {
-  const base = GYM_EXERCISES[focus];
+/**
+ * Swim-specific dryland work — used whenever the athlete has at least one pool session/week
+ * (`GymMode: 'swimDryland'`). Every exercise is chosen for a specific in-water payoff (tagged
+ * via `benefit`) rather than generic strength: rotator-cuff/scapular work for shoulder-injury
+ * prevention, pulling strength for the catch/pull phase, explosive hip extension for starts and
+ * turns, ankle/hip mobility for kick range of motion, and rotational core control for the
+ * streamline position and body roll.
+ */
+const SWIM_DRYLAND_EXERCISES: Record<GymFocus, GymBlock[]> = {
+  fullBody: [
+    { exercise: 'medBallRotationalThrow', sets: 3, reps: '12', benefit: 'corePower' },
+    { exercise: 'pullUps', sets: 3, reps: '6-10', benefit: 'pullStrength' },
+    { exercise: 'squatJump', sets: 3, reps: '8-10', benefit: 'explosiveStart' },
+    { exercise: 'hollowHold', sets: 3, reps: '20-30s', benefit: 'corePower' },
+  ],
+  upperBody: [
+    { exercise: 'pullUps', sets: 4, reps: '6-10', benefit: 'pullStrength' },
+    { exercise: 'shoulderExternalRotation', sets: 3, reps: '15', benefit: 'shoulderHealth' },
+    { exercise: 'yTWRaises', sets: 3, reps: '10', benefit: 'shoulderHealth' },
+    { exercise: 'pushUpPlus', sets: 3, reps: '10-12', benefit: 'shoulderHealth' },
+  ],
+  lowerBody: [
+    { exercise: 'squatJump', sets: 3, reps: '8-10', benefit: 'explosiveStart' },
+    { exercise: 'bulgarianSplitSquat', sets: 3, reps: '10', benefit: 'kickPower' },
+    { exercise: 'calfRaises', sets: 3, reps: '15', benefit: 'kickPower' },
+    { exercise: 'romanianDeadlift', sets: 3, reps: '10', benefit: 'kickPower' },
+  ],
+  core: [
+    { exercise: 'hollowHold', sets: 3, reps: '20-30s', benefit: 'corePower' },
+    { exercise: 'sidePlankReach', sets: 3, reps: '10', benefit: 'corePower' },
+    { exercise: 'deadBug', sets: 3, reps: '12', benefit: 'corePower' },
+    { exercise: 'russianTwists', sets: 3, reps: '20', benefit: 'corePower' },
+  ],
+  mobility: [
+    { exercise: 'shoulderDislocates', sets: 2, reps: '10', benefit: 'shoulderHealth' },
+    { exercise: 'thoracicRotations', sets: 2, reps: '10', benefit: 'mobility' },
+    { exercise: 'ankleMobility', sets: 2, reps: '10', benefit: 'kickPower' },
+    { exercise: 'hip9090Mobility', sets: 2, reps: '8', benefit: 'mobility' },
+  ],
+};
+
+export function buildGymSession(focus: GymFocus, durationMin: number, level: AthleteLevel, mode: GymMode): GymBlock[] {
+  const catalog = mode === 'swimDryland' ? SWIM_DRYLAND_EXERCISES : GENERAL_FITNESS_EXERCISES;
+  const base = catalog[focus];
   if (level === 'beginner') return base.slice(0, 3);
   if (level === 'advanced' && durationMin >= 60) {
     return [...base, { exercise: 'conditioningFinisher' as GymExercise, sets: 3, reps: 'rounds' }];

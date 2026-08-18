@@ -6,14 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Swim Planner: an Expo (React Native + web) app that generates a personalized weekly swim
-training plan from an athlete's profile — level, goal, how many pool sessions per week and
-their duration, optional gym/strength sessions, units and pool length (meters/yards, 25/50),
-whatever pool equipment they own (fins, paddles, pull buoy, kickboard, snorkel, parachute,
-tempo trainer, ankle band), and optionally a recent time-trial result used to target real
-paces. The UI is available in English and Russian. Everything is local-first: there is no
-backend, no auth, no network calls. A profile, a completed-session history, and a language
-choice are saved to `AsyncStorage`; the week's plan is derived from the profile on the fly.
+Swim Planner: an Expo (React Native + web) app that generates a personalized weekly training
+plan from an athlete's profile — level, goal, how many pool sessions per week and their
+duration, optional gym/strength sessions, units and pool length (meters/yards, 25/50), whatever
+pool equipment they own (fins, paddles, pull buoy, kickboard, snorkel, parachute, tempo
+trainer, ankle band), and optionally a recent time-trial result used to target real paces.
+Setting pool sessions to 0 switches the whole app into a gym/fitness-only mode for people who
+don't swim at all — see "Gym modes" below. The UI is available in English and Russian.
+Everything is local-first: there is no backend, no auth, no network calls. A profile, a
+completed-session history, and a language choice are saved to `AsyncStorage`; the week's plan
+is derived from the profile on the fly.
 
 ## Commands
 
@@ -101,6 +103,25 @@ The domain layer is split by concern:
     the step, rendered by the UI as e.g. `@ 1:40`). Technique/recovery/sprint stay effort-based
     and are never paced. A benchmark with `timeSec: 0` is treated as unset (the Profile screen
     strips it before saving) rather than dividing out a nonsense pace.
+
+**Gym modes**: `workoutLibrary.ts` has two separate gym exercise catalogs, chosen by
+`GymSession.mode`. `poolCount > 0` → `'swimDryland'`: every exercise carries a `SwimBenefit` tag
+(`shoulderHealth` / `pullStrength` / `kickPower` / `corePower` / `explosiveStart` / `mobility`)
+so the athlete can see *why* it's programmed — rotator-cuff/scapular work for shoulder-injury
+prevention, pulling-strength work for the catch/pull phase, explosive hip extension for
+starts/turns, ankle/hip mobility for kick range of motion, rotational core control for the
+streamline position and body roll. `poolCount === 0` (no pool sessions at all — a pure
+gym/fitness athlete) → `'generalFitness'`: the plain strength-split catalog, no swim framing,
+no `benefit` tags. `TrainingGoal` (renamed from `SwimGoal` once it started applying to
+non-swimmers too) also biases which `GymFocus` a gym day gets via
+`GYM_FOCUS_ROTATION_BY_GOAL` — `speed` front-loads power (lowerBody/fullBody), `technique`
+front-loads mobility/core (movement quality — and for swimmers, the shoulder/rotational work
+that most carries over to stroke technique). Unlike the swim zone/stroke rotations, this one is
+**not** rotated by week key: the goal should shape the gym split the same way every week, while
+weekly variety already comes from the swim side. When `poolCount === 0`, gym days are spread
+across the week with the same `POOL_DAY_PATTERNS` table used for pool days (reused purely for
+its "spread N per week" property) instead of the pool-day/rest-day-aware placement used when
+there's swimming to work around.
 
 **Weekly variation & history**: nothing about a *profile* changes week to week, but
 `generateWeekPlan`'s week-key rotation (above) means the actual zone order, stroke emphasis,

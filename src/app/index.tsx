@@ -12,7 +12,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { equipmentLabel } from '@/domain/equipment';
 import { DAY_KEYS, DayPlan, DistanceUnit } from '@/domain/types';
 import { basePace100Sec, formatPace100 } from '@/domain/workoutLibrary';
-import { formatDayShareText, formatGymBlock, formatSetStep, swimSessionTitle, unitAbbrev } from '@/i18n/format';
+import { formatDayShareText, formatGymBlock, formatSetStep, gymModeLabel, swimSessionTitle, unitAbbrev } from '@/i18n/format';
 import { useTheme } from '@/hooks/use-theme';
 import { SessionKind, useHistory } from '@/state/history-context';
 import { usePlan } from '@/state/plan-context';
@@ -95,7 +95,7 @@ function DayCard({ day, weekKey, unit }: { day: DayPlan; weekKey: string; unit: 
         <View style={styles.sessionBlock}>
           <CompletionToggle weekKey={weekKey} dayIndex={day.dayIndex} kind="gym" label={t('plan.markDone_gym')} />
           <ThemedText type="smallBold" themeColor="textSecondary">
-            {t(`gymFocus.${day.gym.focus}`)}
+            {t(`gymFocus.${day.gym.focus}`)} · {gymModeLabel(day.gym.mode, t)}
           </ThemedText>
           {day.gym.blocks.map((block, i) => (
             <ThemedText key={i} type="small">
@@ -197,12 +197,14 @@ export default function HomeScreen() {
         <ThemedView style={styles.titleContainer}>
           <ThemedText type="subtitle">{t('plan.thisWeek')}</ThemedText>
           <ThemedText themeColor="textSecondary" style={styles.centerText}>
-            {t('plan.summary', {
-              count: poolSessions,
-              distance: weekPlan.totalPoolDistance.toLocaleString(),
-              unit: abbrev,
-            })}
-            {gymSessions > 0 ? t('plan.gymSuffix', { count: gymSessions }) : ''}
+            {poolSessions > 0
+              ? t('plan.summary', {
+                  count: poolSessions,
+                  distance: weekPlan.totalPoolDistance.toLocaleString(),
+                  unit: abbrev,
+                })
+              : t('plan.gymOnlySummary', { count: gymSessions })}
+            {poolSessions > 0 && gymSessions > 0 ? t('plan.gymSuffix', { count: gymSessions }) : ''}
             {profile.benchmark
               ? t('plan.basePaceSuffix', { pace: formatPace100(basePace100Sec(profile.benchmark)), unit: abbrev })
               : ''}

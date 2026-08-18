@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 
 import { formatPace100 } from '@/domain/workoutLibrary';
-import { DayPlan, DistanceUnit, GymBlock, SetStep, Zone } from '@/domain/types';
+import { DayPlan, DistanceUnit, GymBlock, GymMode, SetStep, Zone } from '@/domain/types';
 
 /** "m"/"yd" — a universal abbreviation, not translated per-language. */
 export function unitAbbrev(unit: DistanceUnit): string {
@@ -30,10 +30,15 @@ const NUMERIC_REPS = /^[\d\-–]+s?$/;
 
 export function formatGymBlock(block: GymBlock, t: TFunction): string {
   const exercise = t(`gymExercise.${block.exercise}`);
-  if (block.reps === 'max') return `${exercise} — ${block.sets} x ${t('reps.max')}`;
-  if (block.reps === 'rounds') return `${exercise} — ${block.sets} ${t('reps.rounds')}`;
-  if (NUMERIC_REPS.test(block.reps)) return `${exercise} — ${block.sets} x ${block.reps}`;
-  return exercise;
+  const benefitSuffix = block.benefit ? ` (${t(`gymBenefit.${block.benefit}`)})` : '';
+  if (block.reps === 'max') return `${exercise} — ${block.sets} x ${t('reps.max')}${benefitSuffix}`;
+  if (block.reps === 'rounds') return `${exercise} — ${block.sets} ${t('reps.rounds')}${benefitSuffix}`;
+  if (NUMERIC_REPS.test(block.reps)) return `${exercise} — ${block.sets} x ${block.reps}${benefitSuffix}`;
+  return `${exercise}${benefitSuffix}`;
+}
+
+export function gymModeLabel(mode: GymMode, t: TFunction): string {
+  return t(`plan.gymMode.${mode}`);
 }
 
 export function zoneLabel(zone: Zone, t: TFunction): string {

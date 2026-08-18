@@ -12,11 +12,11 @@ Swim Planner
 Personalized weekly swim plans
 
 **Short description** (Play ≤80)
-Personalized swim + gym training plans built around your schedule and gear.
+Personalized swim + gym training plans — or gym-only if you don't swim.
 
 **Promotional text** (App Store ≤170, editable without a new build)
-Tell it your level, schedule, and equipment — get a full week of swim sets and gym days,
-targeted to your own pace if you add a recent time trial.
+Tell it your level, schedule, and equipment — get a full week of swim sets and gym days built
+to support your stroke, targeted to your own pace if you add a recent time trial.
 
 **Full description** (≤4000)
 Swim Planner builds a personalized weekly training plan from your swimming profile — no
@@ -32,9 +32,14 @@ Tell it:
   of a rough estimate
 
 It builds a full week: warm-up, main set, and cool-down for every pool day, plus gym days
-placed so a heavy leg day never lands right before a hard kick or sprint session. Choose
-meters or yards and your pool length (25 or 50), mark sessions complete as you go, and back
-your profile up as text any time — everything stays on your device.
+placed so a heavy leg day never lands right before a hard kick or sprint session. Those gym
+days aren't generic — they're swim-specific dryland work (shoulder health, pulling strength,
+explosive starts and turns, kick-range mobility, core/streamline control), each exercise
+labeled with what it's actually for. Don't swim? Set pool sessions to 0 and get a standard
+gym/fitness plan instead — no swimming required.
+
+Choose meters or yards and your pool length (25 or 50), mark sessions complete as you go, and
+back your profile up as text any time — everything stays on your device.
 
 Available in English and Russian.
 
@@ -61,11 +66,11 @@ Swim Planner
 Персональный план тренировок по плаванию
 
 **Краткое описание** (Google Play, ≤80 символов)
-Персональный план тренировок в бассейне и зале под ваше расписание и инвентарь.
+Персональный план тренировок в бассейне и зале — или только зал, если не плаваете.
 
 **Промо-текст** (App Store, ≤170 символов)
 Укажите уровень, расписание и инвентарь — получите план на неделю с заплывами и тренировками
-в зале, а с недавним контрольным заплывом — ещё и с реальным темпом.
+в зале, которые поддерживают вашу технику, а с недавним контрольным заплывом — ещё и с реальным темпом.
 
 **Полное описание** (≤4000 символов)
 Swim Planner составляет персональный план тренировок на неделю на основе вашего профиля
@@ -82,9 +87,14 @@ Swim Planner составляет персональный план тренир
 
 Приложение строит полную неделю: разминка, основная часть и заминка для каждой тренировки в
 бассейне, плюс тренировки в зале, расставленные так, чтобы тяжёлый день на ноги никогда не
-предшествовал тяжёлой тренировке на скорость. Выбирайте метры или ярды и длину бассейна (25
-или 50), отмечайте тренировки выполненными и в любой момент делайте резервную копию профиля
-текстом — все данные остаются на вашем устройстве.
+предшествовал тяжёлой тренировке на скорость. Эти тренировки в зале — не общие упражнения, а
+специальная подготовка пловца: здоровье плеч, сила гребка, взрывная сила для стартов и
+поворотов, подвижность для работы ног, контроль кора и обтекаемости — у каждого упражнения
+указано, для чего оно нужно. Не плаваете? Поставьте 0 тренировок в бассейне — и получите
+обычный план тренажёрного зала, плавание не обязательно.
+
+Выбирайте метры или ярды и длину бассейна (25 или 50), отмечайте тренировки выполненными и в
+любой момент делайте резервную копию профиля текстом — все данные остаются на вашем устройстве.
 
 Доступно на английском и русском языках.
 
