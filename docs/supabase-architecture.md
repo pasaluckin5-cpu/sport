@@ -1,10 +1,22 @@
 # Supabase architecture proposal (draft — not yet implemented)
 
-Status: **proposal for review** (supersedes the earlier Firebase draft — switched to Supabase
-per request). Nothing in `src/` has been touched for this. Once this is approved, the next
-phase is: install `@supabase/supabase-js`, add `src/supabase/*`, build Auth screens, and migrate
-local `AsyncStorage` data into Postgres — in that order, without deleting the local-storage path
-until the Supabase path has been verified end to end.
+Status: **confirmed — ready to implement.** Supersedes the earlier Firebase draft (switched to
+Supabase per request). Three decisions confirmed on top of the original draft:
+
+1. **The coach sends the invite** — an athlete never initiates the link.
+2. **Team membership is mandatory** — there's no separate 1:1 coach↔athlete link; a coach is
+   only ever connected to an athlete through a team the coach owns. The earlier draft's
+   standalone `coach_athletes` table is gone; `team_members` (with a `status` column) is now the
+   *only* authorization link between a coach and an athlete.
+3. **Workouts are structured**, not free text — a coach-authored workout reuses the app's
+   existing `SetStep[]`/`GymBlock[]` shapes (JSONB columns) so it renders through the same
+   `formatSetStep`/`formatGymBlock` formatters the generated plan already uses, instead of a
+   separate free-text rendering path.
+
+Nothing in `src/` has been touched yet. Next phase: install `@supabase/supabase-js`, add
+`src/supabase/*`, build Auth screens, and migrate local `AsyncStorage` data into Postgres — in
+that order, without deleting the local-storage path until the Supabase path has been verified
+end to end.
 
 ## Why Postgres/RLS instead of Firestore rules
 
@@ -96,35 +108,41 @@ create table teams (
   created_at timestamptz not null default now()
 );
 
+-- The *only* authorization link between a coach and an athlete — team membership is mandatory,
+-- there's no separate 1:1 coach_athletes table. A 'pending' row is an invite the coach sent
+-- that the athlete hasn't accepted yet; only the athlete can flip it to 'active' (or delete it
+-- to decline). The coach is the sole inviter — an athlete can never insert their own row here.
 create table team_members (
   team_id uuid not null references teams(id) on delete cascade,
   athlete_id uuid not null references profiles(id) on delete cascade,
-  joined_at timestamptz not null default now(),
+  status link_status not null default 'pending',
+  invited_at timestamptz not null default now(),
+  joined_at timestamptz,
   primary key (team_id, athlete_id)
 );
 
--- The core authorization link between a coach and an athlete — teams are organizational sugar
--- on top of this, not a substitute for it (an athlete can be coached 1:1 with no team at all).
-create table coach_athletes (
-  coach_id uuid not null references profiles(id) on delete cascade,
-  athlete_id uuid not null references profiles(id) on delete cascade,
-  team_id uuid references teams(id) on delete set null,
-  status link_status not null default 'pending',
-  created_at timestamptz not null default now(),
-  primary key (coach_id, athlete_id)
-);
-
 -- A coach-authored session, distinct from the locally-generated plan — the coach's own
--- addition/override for one athlete.
+-- addition/override for one athlete. Structured the same way a generated day already is
+-- (PoolSession's warmup/main/cooldown SetStep[] and GymSession's GymBlock[]) so it renders
+-- through the exact same formatSetStep/formatGymBlock formatters the Plan screen already uses,
+-- instead of a second, free-text rendering path. Both jsonb columns are nullable independently
+-- so a workout can be swim-only, gym-only, or both (a double day), matching DayPlan today.
 create table workouts (
   id uuid primary key default gen_random_uuid(),
   coach_id uuid not null references profiles(id) on delete cascade,
   athlete_id uuid not null references profiles(id) on delete cascade,
   workout_date date not null,
   title text not null,
-  description text not null,  -- v1: free text; see "open questions" re: structured SetStep[] shape
+  pool_zone text,                 -- Zone, e.g. 'threshold' — null if this workout has no swim
+  pool_warmup jsonb,               -- SetStep[]
+  pool_main jsonb,                 -- SetStep[]
+  pool_cooldown jsonb,             -- SetStep[]
+  gym_focus text,                  -- GymFocus — null if this workout has no gym block
+  gym_blocks jsonb,                -- GymBlock[]
+  coach_note text,                 -- free-text note from the coach, shown alongside the structured sets
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  check (pool_warmup is not null or gym_blocks is not null)  -- a workout must have at least one half
 );
 
 create table results (
@@ -139,6 +157,7 @@ create table results (
   created_at timestamptz not null default now()
 );
 
+-- 1:1 coach<->athlete thread.
 create table messages (
   id bigint generated always as identity primary key,
   coach_id uuid not null references profiles(id) on delete cascade,
@@ -147,6 +166,19 @@ create table messages (
   body text not null,
   sent_at timestamptz not null default now(),
   read_at timestamptz
+);
+
+-- Team-wide broadcast chat: one thread per team, visible to the coach and every active member
+-- at once — separate from the 1:1 `messages` thread above, which stays private between the
+-- coach and one athlete. Any active member can post (a team chat, not just a coach announcement
+-- channel); membership is re-checked on every read/write via team_members, so someone removed
+-- from the team loses access immediately.
+create table team_messages (
+  id bigint generated always as identity primary key,
+  team_id uuid not null references teams(id) on delete cascade,
+  sender_id uuid not null references profiles(id) on delete cascade,
+  body text not null,
+  sent_at timestamptz not null default now()
 );
 ```
 
@@ -176,7 +208,7 @@ for each row execute function handle_new_user();
 
 ## Row Level Security
 
-Helper functions first (`security definer` so they can read `profiles`/`coach_athletes`
+Helper functions first (`security definer` so they can read `profiles`/`team_members`/`teams`
 regardless of the calling user's own RLS grants — the standard Supabase pattern for avoiding
 recursive-policy evaluation):
 
@@ -191,11 +223,21 @@ language sql security definer stable set search_path = public as $$
   select exists (select 1 from profiles where id = auth.uid() and role = 'coach');
 $$;
 
+-- "Linked" now means: the caller coaches a team that this athlete is an active member of.
 create or replace function is_linked_coach_of(target_athlete uuid) returns boolean
 language sql security definer stable set search_path = public as $$
   select exists (
-    select 1 from coach_athletes
-    where coach_id = auth.uid() and athlete_id = target_athlete and status = 'active'
+    select 1 from team_members tm
+    join teams t on t.id = tm.team_id
+    where t.coach_id = auth.uid() and tm.athlete_id = target_athlete and tm.status = 'active'
+  );
+$$;
+
+create or replace function is_active_member_of(target_team uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from team_members
+    where team_id = target_team and athlete_id = auth.uid() and status = 'active'
   );
 $$;
 ```
@@ -256,23 +298,35 @@ create policy "teams_select" on teams for select
 create policy "teams_write" on teams for all
   using (coach_id = auth.uid() or is_admin()) with check (coach_id = auth.uid() or is_admin());
 
--- team_members
+-- team_members: this is now the *only* coach<->athlete authorization link, and an invite —
+-- only the team's coach can create a row (send an invite) or remove one (revoke/kick); only the
+-- invited athlete can flip their own row from 'pending' to 'active' (accept) — they can't
+-- create a row for themselves, and they can't accept a row that isn't theirs.
 create policy "team_members_select" on team_members for select
   using (athlete_id = auth.uid() or is_admin()
     or exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid()));
-create policy "team_members_write" on team_members for all
-  using (is_admin() or exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid()))
-  with check (is_admin() or exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid()));
-
--- coach_athletes: either party can propose a link; only the coach (or admin) can accept/edit it.
-create policy "coach_athletes_select" on coach_athletes for select
-  using (coach_id = auth.uid() or athlete_id = auth.uid() or is_admin());
-create policy "coach_athletes_insert" on coach_athletes for insert
-  with check (coach_id = auth.uid() or athlete_id = auth.uid());
-create policy "coach_athletes_update" on coach_athletes for update
-  using (coach_id = auth.uid() or is_admin());
-create policy "coach_athletes_delete" on coach_athletes for delete
-  using (coach_id = auth.uid() or athlete_id = auth.uid() or is_admin());
+create policy "team_members_insert" on team_members for insert
+  with check (
+    status = 'pending'
+    and exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid())
+  );
+create policy "team_members_update" on team_members for update
+  using (
+    athlete_id = auth.uid()
+    or is_admin()
+    or exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid())
+  )
+  with check (
+    -- an athlete accepting their own invite may only flip pending -> active, nothing else
+    (athlete_id = auth.uid() and status = 'active')
+    or is_admin()
+    or exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid())
+  );
+create policy "team_members_delete" on team_members for delete
+  using (
+    athlete_id = auth.uid() or is_admin()
+    or exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid())
+  );
 
 -- workouts: only a linked coach can author one for their own athlete.
 create policy "workouts_select" on workouts for select
@@ -301,6 +355,25 @@ create policy "messages_select" on messages for select
 create policy "messages_insert" on messages for insert
   with check (sender_id = auth.uid() and (coach_id = auth.uid() or athlete_id = auth.uid()));
 create policy "messages_delete" on messages for delete using (is_admin());
+
+-- team_messages: the team's coach and every *active* member can read/post; removing someone
+-- from team_members (status no longer 'active') immediately cuts their access on the next
+-- request, since is_active_member_of() re-checks live, not a cached membership flag.
+create policy "team_messages_select" on team_messages for select
+  using (
+    is_admin()
+    or exists (select 1 from teams t where t.id = team_messages.team_id and t.coach_id = auth.uid())
+    or is_active_member_of(team_id)
+  );
+create policy "team_messages_insert" on team_messages for insert
+  with check (
+    sender_id = auth.uid()
+    and (
+      exists (select 1 from teams t where t.id = team_messages.team_id and t.coach_id = auth.uid())
+      or is_active_member_of(team_id)
+    )
+  );
+create policy "team_messages_delete" on team_messages for delete using (is_admin());
 ```
 
 Checked against the two literal examples from the request:
@@ -350,8 +423,9 @@ the SQL editor / a migration), never through client code, so it's never needed t
    after the fact, Supabase is additive on top of it.
 5. One-time migration-on-sign-in: if local `AsyncStorage` has profile/history/strokeLog data and
    the signed-in user's Postgres rows don't exist yet, upload it once.
-6. Coach features (team management, workout authoring, results review, messaging) as their own
-   screens, gated on `role === 'coach'`.
+6. Coach features (team management/invites, structured workout authoring, results review, the
+   1:1 message thread, and the team-wide group chat) as their own screens, gated on
+   `role === 'coach'`.
 7. Update `docs/privacy-policy.html` and the in-app privacy section for optional accounts: what
    Supabase (hosted Postgres, EU/US region choice at project creation) stores, that a linked
    coach can see profile/history/results (not friends — separate, not-yet-designed feature), how
@@ -362,19 +436,25 @@ the SQL editor / a migration), never through client code, so it's never needed t
    can create (supabase.com → New project → SQL editor: run the schema above → Project
    Settings → API: copy URL + anon key into `.env`).
 
-## Open questions before implementing
+## Resolved decisions (were open questions, now confirmed)
 
-1. **Coach↔athlete linking flow**: who initiates? The `coach_athletes_insert` policy supports
-   either direction (athlete requests a coach by email/code, or coach invites an athlete) at
-   `status: 'pending'` — only the coach finalizes it to `'active'`. Just need to confirm the UX.
-2. **Team vs. 1:1 coaching**: is a `team` required, or optional organizational grouping on top of
-   `coach_athletes` (the real authorization link)? Schema above treats it as optional — confirm
-   that's right.
-3. **`workouts.description`**: free text for v1, or reuse the existing `SetStep[]`/`GymBlock[]`
-   structured shape so a coach-authored workout renders through the same `formatSetStep`/
-   `formatGymBlock` formatters the generated plan already uses? More work up front, avoids two
-   rendering paths.
-4. **Friends** (from the original request, separate from coach) aren't in this schema yet —
-   scoped out intentionally, same as the Firebase draft; worth its own design pass once this core
-   schema is settled, since it needs a much looser read grant than the coach relationship
-   (probably a curated "public summary" view rather than raw table access).
+1. **Coach↔athlete linking**: the coach is the sole inviter. `team_members_insert` only allows a
+   row when the caller owns the target team; an athlete can never create their own membership
+   row, only flip an existing `'pending'` row (invited by their coach) to `'active'`.
+2. **Team vs. 1:1 coaching**: team membership is mandatory — `coach_athletes` was removed
+   entirely, `team_members` is the one and only coach↔athlete authorization link.
+3. **`workouts`**: structured (`pool_warmup`/`pool_main`/`pool_cooldown`/`gym_blocks` as `jsonb`
+   holding `SetStep[]`/`GymBlock[]`), not free text — renders through the existing
+   `formatSetStep`/`formatGymBlock` formatters, one rendering path for generated and
+   coach-authored sessions alike.
+
+## Still open / out of scope for this pass
+
+1. **Friends** (from the original request, separate from coach) aren't in this schema — scoped
+   out intentionally; worth its own design pass once the coach/team model above ships, since it
+   needs a much looser read grant than the coach relationship (probably a curated "public
+   summary" view rather than raw table access).
+2. **Team chat pagination/real-time**: `team_messages`/`messages` are plain tables for v1 (polled
+   or fetched on screen focus); Supabase Realtime (`supabase.channel(...).on('postgres_changes',
+   ...)`) is a natural follow-up for live delivery without a page refresh, not required to ship
+   a working chat.
