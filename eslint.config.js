@@ -18,4 +18,14 @@ module.exports = [
       },
     },
   },
+  {
+    // '@/bluetooth/ble-engine' only exists as ble-engine.native.ts / ble-engine.web.ts —
+    // Metro (bundling) and tsc (via tsconfig's moduleSuffixes) both resolve the platform
+    // variant correctly, but eslint-plugin-import's resolver doesn't know about RN's
+    // platform-suffix convention and flags the bare specifier as unresolved.
+    files: ['src/state/heart-rate-context.tsx'],
+    rules: {
+      'import/no-unresolved': 'off',
+    },
+  },
 ];

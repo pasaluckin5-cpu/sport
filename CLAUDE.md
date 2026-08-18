@@ -299,6 +299,17 @@ its SQL editor. Nothing here is wired to a real project by default: `src/supabas
   linked coach can see. `src/i18n/format.ts`'s `friendResultProgressText` reuses the same
   world-record/ЕВСК-rank comparison the individual "Records & goals" section uses, so a friend's
   logged result shows the same kind of "next goal" line.
+
+**Bluetooth heart rate — implemented but dormant**: `src/bluetooth/` (platform-split
+`ble-engine.native.ts`/`.web.ts` on `react-native-ble-plx`, standard BLE Heart Rate Service),
+`src/state/heart-rate-context.tsx`, and `src/components/heart-rate-section.tsx` exist and are
+verified to typecheck/lint/build, but are deliberately **not** wired into `_layout.tsx`/
+`index.tsx`, and `app.json` has no `react-native-ble-plx` plugin entry — kept code-only rather
+than shipped as a visible feature. See docs/supabase-architecture.md's "Bluetooth heart rate
+(dormant)" section for the physical caveat that shaped its design (Bluetooth doesn't propagate
+through water, so this is only ever useful for checking pulse at the wall, not mid-swim), what
+exists, and exactly what re-wiring it involves.
+
 **Sharing**: each day's `Collapsible` on the Plan tab has a "Share" action
 (`src/utils/share.ts`'s `shareOrCopy`) that opens the native share sheet on iOS/Android
 (`Share.share` from `react-native`) so an athlete can send a session to a coach or training

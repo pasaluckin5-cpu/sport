@@ -2,6 +2,12 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // Metro resolves platform-specific files (ble-engine.native.ts vs. .web.ts) at bundle time
+    // per target platform; tsc has no equivalent per-platform pass, so this picks one consistent
+    // resolution project-wide for `tsc --noEmit` to type-check against — native, since the app is
+    // mobile-first. The unresolved .web.ts variant still gets type-checked on its own (it's
+    // covered by the "include" glob below), just not through this import path.
+    "moduleSuffixes": [".native", ""],
     "paths": {
       "@/*": [
         "./src/*"

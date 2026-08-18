@@ -518,10 +518,61 @@ together, so this purely widens read access, it can't accidentally narrow anythi
    plain tables (polled or fetched on screen focus); Supabase Realtime
    (`supabase.channel(...).on('postgres_changes', ...)`) is a natural follow-up for live delivery
    without a page refresh, not required to ship a working chat or friends list.
-2. **Sensors**: raised in the original request, not attempted. Specialized swim-sensor hardware
-   (Form Smart Goggles, TritonWear, Garmin's swim metrics) doesn't expose a public third-party
-   API to indie apps in any case found — that would need a vendor partnership, not an SDK
-   integration. The one broadly-interoperable option is generic Bluetooth Heart Rate Service
-   (works with most HR straps and many watches), which needs `react-native-ble-plx` and an EAS
-   dev-client build (not Expo Go) — real hardware to pair with and a physical device to test on,
-   neither available in this sandbox, so not built speculatively.
+2. **Sensors**: specialized swim-sensor hardware (Form Smart Goggles, TritonWear, Garmin's swim
+   metrics) doesn't expose a public third-party API to indie apps in any case found — that needs
+   a vendor partnership, not an SDK integration (see "Sensor vendor partnerships" below). The one
+   broadly-interoperable option, generic Bluetooth Heart Rate Service, **is implemented in code
+   but deliberately not wired into the running app** — see "Bluetooth heart rate (dormant)"
+   below for what exists and how to turn it on.
+
+### Bluetooth heart rate (dormant — code exists, not wired into the app)
+
+Standard Bluetooth SIG Heart Rate Service/Measurement (works with most consumer HR chest straps
+and many watches — not swim-specific hardware, which has no public API at all). Implemented,
+verified to typecheck/lint/build, but currently **disconnected from `_layout.tsx`/`index.tsx`**
+and from `app.json`'s plugin list at the request that this stay code-only for now rather than
+ship as a visible feature:
+
+- `src/bluetooth/types.ts` — the shared `BleEngine` interface.
+- `src/bluetooth/ble-engine.native.ts` — the real implementation, on `react-native-ble-plx`
+  (already an `npm` dependency). `src/bluetooth/ble-engine.web.ts` — a no-op stub. Metro/tsc
+  pick the right one per platform via the file extension (`tsconfig.json`'s `moduleSuffixes`),
+  so the native BLE library never reaches the web bundle (verified: zero references to
+  `react-native-ble-plx`/`BleManager` in the exported web bundle).
+- `src/state/heart-rate-context.tsx` (`HeartRateProvider`/`useHeartRate`) and
+  `src/components/heart-rate-section.tsx` — a scan/connect/live-BPM UI, written but not
+  imported anywhere live.
+- **Physical caveat baked into the UI copy** (`heartRate.hint` in both locales, for whenever
+  this does ship): Bluetooth doesn't propagate through water, so this only works for checking
+  pulse at the wall between reps — not continuous tracking mid-swim. Real swim-specific
+  hardware works around this by recording to onboard memory and syncing afterward, which a
+  generic BLE strap can't do.
+
+**To turn this on**: re-add the `react-native-ble-plx` plugin block to `app.json`'s `plugins`
+(config: `isBackgroundEnabled: false`, `neverForLocation: true`, a `bluetoothAlwaysPermission`
+string — verified via `npx expo prebuild` that this generates the correct iOS Info.plist entry
+and Android manifest permissions, including the `neverForLocation` flag), wrap `_layout.tsx`'s
+tree in `<HeartRateProvider>`, and render `<HeartRateSection />` on the Plan screen. Also switch
+`package.json`'s `android`/`ios` scripts from `expo start --android/--ios` back to
+`expo run:android`/`expo run:ios` — once this native module is active, the app needs a custom
+dev-client build and can no longer launch in plain Expo Go. None of this can be runtime-tested
+in this sandbox regardless (no simulator/device, no real BLE hardware) — same "read for
+correctness, can't verify live" category as the native tab chrome already called out in
+CLAUDE.md's "Runtime verification" section.
+
+### Sensor vendor partnerships
+
+If real swim-specific sensor data (stroke count, SWOLF, live pace) is wanted rather than the
+generic Bluetooth Heart Rate fallback above, that requires a business relationship with the
+hardware maker, not just more engineering time:
+- **Garmin**: the [Connect IQ SDK](https://developer.garmin.com/connect-iq/overview/) lets you
+  build a companion *watch app* (not a phone-side integration) in Monkey C, a completely
+  separate app store/ecosystem from this one. Garmin also has a
+  [Health API](https://developer.garmin.com/gc-developer-program/health-api/) for pulling
+  synced activity data server-side, which requires applying for API access as a registered
+  Garmin Connect developer/partner.
+- **Form (Smart Swim Goggles)** and **TritonWear**: no public developer program or API found at
+  all — the practical path is contacting the company directly (developer relations/partnerships
+  contact, or their general support channel) to ask.
+None of these can be evaluated or pursued from inside this coding session — they're business
+development conversations for you to have, not something I can code around.
