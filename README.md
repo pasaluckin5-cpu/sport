@@ -7,13 +7,20 @@ It takes into account:
 - How many pool sessions per week you want, and how long each one is
 - Optional strength/gym sessions per week, coordinated with pool days so a heavy leg day
   doesn't land right before a hard kick/sprint swim
+- Meters or yards, and your pool length (25 or 50) — every set is a whole number of pool lengths
 - The equipment you actually own (fins, paddles, pull buoy, kickboard, snorkel, parachute,
   tempo trainer, ankle band) — sets only call for gear you have
 - Optionally, a recent time trial (e.g. 400m), so main-set paces are targeted to you instead
   of a rough estimate by level
 
+The plan varies from week to week (zone order, stroke emphasis, and gym focus rotate on a
+weekly cycle) instead of being the exact same week forever, and you can mark sessions done and
+see a history of completed weeks. The UI is available in English and Russian, switchable in the
+Profile tab.
+
 The app is local-first: your profile is saved on-device and the week's plan is generated from
-it, no account or server required.
+it, no account or server required. There's no cloud backup, but you can copy your profile as
+text (Profile → Backup & restore) and paste it back in on a new device.
 
 ## Getting started
 
@@ -67,3 +74,20 @@ credentials only you can provide:
 `eas.json` also has a `development` profile (installs a dev client for local native debugging)
 and a `preview` profile (an internal-distribution build you can share without going through a
 store) if you want a build before you're ready to submit anywhere.
+
+### Privacy policy URL
+
+Both stores require a public privacy policy URL in the listing, even though this app collects
+nothing. The policy text lives in two places, kept in sync by hand:
+- In-app: the "Privacy policy" section at the bottom of the Profile screen (translated).
+- Standalone: `docs/privacy-policy.html` (bilingual EN/RU in one static page).
+
+To get a public URL for App Store Connect / Play Console, enable GitHub Pages on this repo:
+**Settings → Pages → Source: Deploy from a branch → Branch: main, folder: /docs**. The policy
+will then be live at `https://<your-username>.github.io/<repo>/privacy-policy.html`.
+
+### Store listing copy
+
+Draft App Store/Google Play listing copy (title, short/full description, keywords, EN + RU) is
+in `docs/store-listing.md`. Screenshots aren't included in the repo (binary, and tied to a
+specific build) — see that file for how to generate them.

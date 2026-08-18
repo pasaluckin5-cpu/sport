@@ -39,11 +39,10 @@ describe('generateWeekPlan', () => {
   });
 
   it('puts fins to use on an aerobic-base kick set when the athlete owns fins', () => {
-    const plan = generateWeekPlan(
-      withProfile({ goal: 'fitness', poolSessionsPerWeek: 1, equipment: ['fins'] }),
-    );
-    const session = plan.days.find((d) => d.pool)!.pool!;
-    expect(session.zone).toBe('aerobicBase');
+    // All 7 zones in the rotation are scheduled somewhere regardless of the week's rotation
+    // offset, so an aerobicBase day is guaranteed to show up.
+    const plan = generateWeekPlan(withProfile({ goal: 'fitness', poolSessionsPerWeek: 7, equipment: ['fins'] }));
+    const session = plan.days.find((d) => d.pool?.zone === 'aerobicBase')!.pool!;
     expect(session.equipmentUsed).toContain('fins');
   });
 
@@ -63,31 +62,68 @@ describe('generateWeekPlan', () => {
   it('scales pool session volume up with longer session duration', () => {
     const shortPlan = generateWeekPlan(withProfile({ poolSessionDurationMin: 30, poolSessionsPerWeek: 1 }));
     const longPlan = generateWeekPlan(withProfile({ poolSessionDurationMin: 90, poolSessionsPerWeek: 1 }));
-    const shortDistance = shortPlan.days.find((d) => d.pool)!.pool!.totalDistanceM;
-    const longDistance = longPlan.days.find((d) => d.pool)!.pool!.totalDistanceM;
+    const shortDistance = shortPlan.days.find((d) => d.pool)!.pool!.totalDistance;
+    const longDistance = longPlan.days.find((d) => d.pool)!.pool!.totalDistance;
     expect(longDistance).toBeGreaterThan(shortDistance);
   });
 
-  it('totalPoolDistanceM matches the sum of each pool session', () => {
+  it('totalPoolDistance matches the sum of each pool session', () => {
     const plan = generateWeekPlan(withProfile({ poolSessionsPerWeek: 4 }));
-    const expected = plan.days.reduce((sum, d) => sum + (d.pool?.totalDistanceM ?? 0), 0);
-    expect(plan.totalPoolDistanceM).toBe(expected);
+    const expected = plan.days.reduce((sum, d) => sum + (d.pool?.totalDistance ?? 0), 0);
+    expect(plan.totalPoolDistance).toBe(expected);
   });
 
-  it('annotates threshold main sets with a target pace when a benchmark is set', () => {
+  it('gives paced-zone main-set steps a target pace when a benchmark is set', () => {
     const plan = generateWeekPlan(
-      withProfile({ goal: 'endurance', poolSessionsPerWeek: 1, benchmark: { distanceM: 400, timeSec: 400 } }),
+      withProfile({ goal: 'endurance', poolSessionsPerWeek: 7, benchmark: { distance: 400, timeSec: 400 } }),
     );
-    const session = plan.days.find((d) => d.pool)!.pool!;
-    expect(session.zone).toBe('aerobicBase');
-    const mainLabels = session.main.map((s) => s.label).join(' ');
-    expect(mainLabels).toMatch(/@ \d+:\d{2}/);
+    const pacedSteps = plan.days
+      .filter((d) => d.pool)
+      .flatMap((d) => d.pool!.main)
+      .filter((s) => s.paceSec !== undefined);
+    expect(pacedSteps.length).toBeGreaterThan(0);
   });
 
   it('covers more distance for the same duration with a faster benchmark pace', () => {
     const base = withProfile({ poolSessionsPerWeek: 1, poolSessionDurationMin: 60 });
-    const slow = generateWeekPlan({ ...base, benchmark: { distanceM: 400, timeSec: 480 } });
-    const fast = generateWeekPlan({ ...base, benchmark: { distanceM: 400, timeSec: 300 } });
-    expect(fast.totalPoolDistanceM).toBeGreaterThan(slow.totalPoolDistanceM);
+    const slow = generateWeekPlan({ ...base, benchmark: { distance: 400, timeSec: 480 } });
+    const fast = generateWeekPlan({ ...base, benchmark: { distance: 400, timeSec: 300 } });
+    expect(fast.totalPoolDistance).toBeGreaterThan(slow.totalPoolDistance);
+  });
+
+  it('rounds every set distance to a whole number of pool lengths', () => {
+    const plan = generateWeekPlan(withProfile({ poolLength: 50, poolSessionsPerWeek: 3 }));
+    for (const day of plan.days) {
+      if (!day.pool) continue;
+      for (const step of [...day.pool.warmup, ...day.pool.main, ...day.pool.cooldown]) {
+        expect(step.repDistance % 50).toBe(0);
+      }
+    }
+  });
+
+  it('covers more yards than meters for the same level and duration (yards are shorter)', () => {
+    const metersPlan = generateWeekPlan(withProfile({ unit: 'meters', poolSessionsPerWeek: 1 }));
+    const yardsPlan = generateWeekPlan(withProfile({ unit: 'yards', poolSessionsPerWeek: 1 }));
+    expect(yardsPlan.totalPoolDistance).toBeGreaterThan(metersPlan.totalPoolDistance);
+  });
+
+  it('produces the same plan for the same week key (deterministic)', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 4, gymSessionsPerWeek: 2 });
+    const a = generateWeekPlan(profile, { weekKey: '2026-W10' });
+    const b = generateWeekPlan(profile, { weekKey: '2026-W10' });
+    expect(a).toEqual(b);
+  });
+
+  it('varies the zone rotation across different weeks', () => {
+    const profile = withProfile({ goal: 'fitness', poolSessionsPerWeek: 3 });
+    const weekKeys = ['2026-W01', '2026-W02', '2026-W03', '2026-W04', '2026-W05', '2026-W06', '2026-W07'];
+    const zoneSequences = weekKeys.map((weekKey) => {
+      const plan = generateWeekPlan(profile, { weekKey });
+      return plan.days
+        .filter((d) => d.pool)
+        .map((d) => d.pool!.zone)
+        .join(',');
+    });
+    expect(new Set(zoneSequences).size).toBeGreaterThan(1);
   });
 });

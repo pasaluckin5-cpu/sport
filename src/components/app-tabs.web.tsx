@@ -6,6 +6,7 @@ import {
   TabTriggerSlotProps,
   TabListProps,
 } from 'expo-router/ui';
+import { useTranslation } from 'react-i18next';
 import { Pressable, View, StyleSheet } from 'react-native';
 
 import { ThemedText } from './themed-text';
@@ -14,16 +15,17 @@ import { ThemedView } from './themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function AppTabs() {
+  const { t } = useTranslation();
   return (
     <Tabs>
       <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
         <CustomTabList>
           <TabTrigger name="home" href="/" asChild>
-            <TabButton>Plan</TabButton>
+            <TabButton>{t('tabs.plan')}</TabButton>
           </TabTrigger>
           <TabTrigger name="profile" href="/profile" asChild>
-            <TabButton>Profile</TabButton>
+            <TabButton>{t('tabs.profile')}</TabButton>
           </TabTrigger>
         </CustomTabList>
       </TabList>

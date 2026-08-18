@@ -1,41 +1,32 @@
+import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useState, type PropsWithChildren } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChipGroup } from '@/components/chip-group';
 import { Stepper } from '@/components/stepper';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Collapsible } from '@/components/ui/collapsible';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { EQUIPMENT_CATALOG } from '@/domain/equipment';
+import { EQUIPMENT_CATALOG, equipmentLabel } from '@/domain/equipment';
 import { DEFAULT_PROFILE } from '@/domain/planGenerator';
-import { AthleteLevel, AthleteProfile, Equipment, SwimGoal } from '@/domain/types';
+import { parseProfileBackup } from '@/domain/profileValidation';
+import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, PoolLength, SwimGoal } from '@/domain/types';
+import { unitAbbrev } from '@/i18n/format';
+import { AppLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
 import { useTheme } from '@/hooks/use-theme';
+import { useLanguage } from '@/state/language-context';
 import { usePlan } from '@/state/plan-context';
 
-const BENCHMARK_DISTANCE_OPTIONS: { value: '100' | '200' | '400' | '1000'; label: string }[] = [
-  { value: '100', label: '100m' },
-  { value: '200', label: '200m' },
-  { value: '400', label: '400m' },
-  { value: '1000', label: '1000m' },
-];
-
-const LEVEL_OPTIONS: { value: AthleteLevel; label: string }[] = [
-  { value: 'beginner', label: 'Beginner' },
-  { value: 'intermediate', label: 'Intermediate' },
-  { value: 'advanced', label: 'Advanced' },
-];
-
-const GOAL_OPTIONS: { value: SwimGoal; label: string }[] = [
-  { value: 'fitness', label: 'General fitness' },
-  { value: 'endurance', label: 'Endurance' },
-  { value: 'speed', label: 'Speed' },
-  { value: 'technique', label: 'Technique' },
-];
-
-const EQUIPMENT_OPTIONS = EQUIPMENT_CATALOG.map((e) => ({ value: e.id, label: `${e.emoji} ${e.label}` }));
+const LEVELS: AthleteLevel[] = ['beginner', 'intermediate', 'advanced'];
+const GOALS: SwimGoal[] = ['fitness', 'endurance', 'speed', 'technique'];
+const UNITS: DistanceUnit[] = ['meters', 'yards'];
+const POOL_LENGTHS: PoolLength[] = [25, 50];
+const BENCHMARK_DISTANCES = [100, 200, 400, 1000];
 
 function FormSection({ label, children }: PropsWithChildren<{ label: string }>) {
   return (
@@ -49,6 +40,7 @@ function FormSection({ label, children }: PropsWithChildren<{ label: string }>) 
 }
 
 export default function ProfileScreen() {
+  const { t } = useTranslation();
   const { isReady } = usePlan();
 
   // Mounting the form only once loading is resolved lets its initial state pick up the
@@ -56,7 +48,7 @@ export default function ProfileScreen() {
   if (!isReady) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ThemedText themeColor="textSecondary">Loading…</ThemedText>
+        <ThemedText themeColor="textSecondary">{t('common.loading')}</ThemedText>
       </ThemedView>
     );
   }
@@ -65,9 +57,14 @@ export default function ProfileScreen() {
 }
 
 function ProfileForm() {
+  const { t } = useTranslation();
   const { profile, updateProfile } = usePlan();
+  const { language, setLanguage } = useLanguage();
   const [form, setForm] = useState<AthleteProfile>(profile ?? DEFAULT_PROFILE);
   const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [restoreText, setRestoreText] = useState('');
+  const [restoreMessage, setRestoreMessage] = useState<'success' | 'error' | null>(null);
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
   const insets = {
@@ -111,8 +108,25 @@ function ProfileForm() {
     setSaved(false);
     setForm((f) => ({
       ...f,
-      benchmark: { distanceM: f.benchmark?.distanceM ?? 400, timeSec: min * 60 + sec },
+      benchmark: { distance: f.benchmark?.distance ?? 400, timeSec: min * 60 + sec },
     }));
+  }
+
+  async function handleCopyBackup() {
+    if (!profile) return;
+    await Clipboard.setStringAsync(JSON.stringify(profile));
+    setCopied(true);
+  }
+
+  function handleRestore() {
+    const parsed = parseProfileBackup(restoreText.trim());
+    if (!parsed) {
+      setRestoreMessage('error');
+      return;
+    }
+    setForm(parsed);
+    setRestoreMessage('success');
+    setRestoreText('');
   }
 
   return (
@@ -122,16 +136,24 @@ function ProfileForm() {
       contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
       <ThemedView style={styles.container}>
         <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Your profile</ThemedText>
+          <ThemedText type="subtitle">{t('profile.title')}</ThemedText>
           <ThemedText themeColor="textSecondary" style={styles.centerText}>
-            Tell us how you train and we&apos;ll build your weekly plan around it.
+            {t('profile.subtitle')}
           </ThemedText>
         </ThemedView>
 
         <ThemedView style={styles.form}>
-          <FormSection label="EXPERIENCE LEVEL">
+          <FormSection label={t('profile.section.language')}>
             <ChipGroup
-              options={LEVEL_OPTIONS}
+              options={SUPPORTED_LANGUAGES.map((code) => ({ value: code, label: t(`language.${code}`) }))}
+              selected={[language]}
+              onToggle={(value: AppLanguage) => setLanguage(value)}
+            />
+          </FormSection>
+
+          <FormSection label={t('profile.section.level')}>
+            <ChipGroup
+              options={LEVELS.map((value) => ({ value, label: t(`profile.level.${value}`) }))}
               selected={[form.level]}
               onToggle={(value) => {
                 setSaved(false);
@@ -140,9 +162,9 @@ function ProfileForm() {
             />
           </FormSection>
 
-          <FormSection label="MAIN GOAL">
+          <FormSection label={t('profile.section.goal')}>
             <ChipGroup
-              options={GOAL_OPTIONS}
+              options={GOALS.map((value) => ({ value, label: t(`profile.goal.${value}`) }))}
               selected={[form.goal]}
               onToggle={(value) => {
                 setSaved(false);
@@ -151,7 +173,29 @@ function ProfileForm() {
             />
           </FormSection>
 
-          <FormSection label="POOL SESSIONS PER WEEK">
+          <FormSection label={t('profile.section.units')}>
+            <ChipGroup
+              options={UNITS.map((value) => ({ value, label: t(`profile.unit.${value}`) }))}
+              selected={[form.unit]}
+              onToggle={(value) => {
+                setSaved(false);
+                setForm((f) => ({ ...f, unit: value }));
+              }}
+            />
+            <ChipGroup
+              options={POOL_LENGTHS.map((value) => ({
+                value: String(value) as '25' | '50',
+                label: t('profile.poolLength', { length: value, unit: unitAbbrev(form.unit) }),
+              }))}
+              selected={[String(form.poolLength) as '25' | '50']}
+              onToggle={(value) => {
+                setSaved(false);
+                setForm((f) => ({ ...f, poolLength: Number(value) as PoolLength }));
+              }}
+            />
+          </FormSection>
+
+          <FormSection label={t('profile.section.poolSessionsPerWeek')}>
             <Stepper
               value={form.poolSessionsPerWeek}
               min={1}
@@ -163,13 +207,13 @@ function ProfileForm() {
             />
           </FormSection>
 
-          <FormSection label="POOL SESSION LENGTH">
+          <FormSection label={t('profile.section.poolSessionLength')}>
             <Stepper
               value={form.poolSessionDurationMin}
               min={30}
               max={120}
               step={15}
-              suffix="min"
+              suffix={t('common.min')}
               onChange={(v) => {
                 setSaved(false);
                 setForm((f) => ({ ...f, poolSessionDurationMin: v }));
@@ -177,7 +221,7 @@ function ProfileForm() {
             />
           </FormSection>
 
-          <FormSection label="GYM SESSIONS PER WEEK">
+          <FormSection label={t('profile.section.gymSessionsPerWeek')}>
             <Stepper
               value={form.gymSessionsPerWeek}
               min={0}
@@ -189,36 +233,42 @@ function ProfileForm() {
             />
           </FormSection>
 
-          <FormSection label="EQUIPMENT YOU HAVE">
-            <ChipGroup options={EQUIPMENT_OPTIONS} selected={form.equipment} onToggle={toggleEquipment} />
+          <FormSection label={t('profile.section.equipment')}>
+            <ChipGroup
+              options={EQUIPMENT_CATALOG.map((e) => ({ value: e.id, label: `${e.emoji} ${equipmentLabel(e.id, t)}` }))}
+              selected={form.equipment}
+              onToggle={toggleEquipment}
+            />
           </FormSection>
 
-          <FormSection label="RECENT TIME TRIAL (OPTIONAL)">
+          <FormSection label={t('profile.section.benchmark')}>
             <ThemedText type="small" themeColor="textSecondary">
-              Add a recent time over a set distance and we&apos;ll target real paces for your
-              main sets instead of a rough estimate.
+              {t('profile.benchmark.hint')}
             </ThemedText>
             <ChipGroup
-              options={BENCHMARK_DISTANCE_OPTIONS}
-              selected={form.benchmark ? [String(form.benchmark.distanceM) as '100' | '200' | '400' | '1000'] : []}
+              options={BENCHMARK_DISTANCES.map((value) => ({
+                value: String(value) as '100' | '200' | '400' | '1000',
+                label: `${value}${unitAbbrev(form.unit)}`,
+              }))}
+              selected={form.benchmark ? [String(form.benchmark.distance) as '100' | '200' | '400' | '1000'] : []}
               onToggle={(value) => {
                 setSaved(false);
                 setForm((f) => ({
                   ...f,
-                  benchmark: { distanceM: Number(value), timeSec: f.benchmark?.timeSec ?? 0 },
+                  benchmark: { distance: Number(value), timeSec: f.benchmark?.timeSec ?? 0 },
                 }));
               }}
             />
             <ThemedView style={styles.timeRow}>
               <ThemedView style={styles.timeField}>
                 <ThemedText type="small" themeColor="textSecondary">
-                  min
+                  {t('common.min')}
                 </ThemedText>
                 <Stepper value={benchmarkMin} min={0} max={30} onChange={(v) => setBenchmarkTime(v, benchmarkSec)} />
               </ThemedView>
               <ThemedView style={styles.timeField}>
                 <ThemedText type="small" themeColor="textSecondary">
-                  sec
+                  {t('common.sec')}
                 </ThemedText>
                 <Stepper
                   value={benchmarkSec}
@@ -236,21 +286,78 @@ function ProfileForm() {
                   setForm((f) => ({ ...f, benchmark: undefined }));
                 }}
                 style={({ pressed }) => pressed && styles.pressed}>
-                <ThemedText type="link">Clear</ThemedText>
+                <ThemedText type="link">{t('common.clear')}</ThemedText>
               </Pressable>
             )}
           </FormSection>
 
+          {profile && (
+            <FormSection label={t('profile.section.backup')}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('profile.backup.hint')}
+              </ThemedText>
+              <Pressable
+                onPress={handleCopyBackup}
+                style={({ pressed }) => pressed && styles.pressed}>
+                <ThemedView type="backgroundElement" style={styles.secondaryButton}>
+                  <ThemedText type="smallBold">{t('profile.backup.copy')}</ThemedText>
+                </ThemedView>
+              </Pressable>
+              {copied && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('profile.backup.copied')}
+                </ThemedText>
+              )}
+              <TextInput
+                value={restoreText}
+                onChangeText={(text) => {
+                  setRestoreText(text);
+                  setRestoreMessage(null);
+                }}
+                placeholder={t('profile.backup.restorePlaceholder')}
+                placeholderTextColor={theme.textSecondary}
+                multiline
+                style={[styles.restoreInput, { color: theme.text, borderColor: theme.backgroundSelected }]}
+              />
+              <Pressable
+                onPress={handleRestore}
+                disabled={restoreText.trim().length === 0}
+                style={({ pressed }) => pressed && styles.pressed}>
+                <ThemedView type="backgroundElement" style={styles.secondaryButton}>
+                  <ThemedText type="smallBold">{t('profile.backup.restore')}</ThemedText>
+                </ThemedView>
+              </Pressable>
+              {restoreMessage === 'success' && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('profile.backup.restoreSuccess')}
+                </ThemedText>
+              )}
+              {restoreMessage === 'error' && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('profile.backup.restoreError')}
+                </ThemedText>
+              )}
+            </FormSection>
+          )}
+
           <Pressable onPress={handleSave} style={({ pressed }) => pressed && styles.pressed}>
             <ThemedView type="backgroundSelected" style={styles.saveButton}>
-              <ThemedText type="smallBold">{profile ? 'Save & regenerate plan' : 'Create my plan'}</ThemedText>
+              <ThemedText type="smallBold">{profile ? t('profile.save.update') : t('profile.save.create')}</ThemedText>
             </ThemedView>
           </Pressable>
           {saved && (
             <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
-              Saved.
+              {t('profile.saved')}
             </ThemedText>
           )}
+
+          <Collapsible title={t('privacy.title')}>
+            {(t('privacy.body', { returnObjects: true }) as string[]).map((paragraph, i) => (
+              <ThemedText key={i} type="small" style={styles.privacyParagraph}>
+                {paragraph}
+              </ThemedText>
+            ))}
+          </Collapsible>
         </ThemedView>
 
         {Platform.OS === 'web' && <WebBadge />}
@@ -305,7 +412,23 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     borderRadius: Spacing.three,
   },
+  secondaryButton: {
+    alignItems: 'center',
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.three,
+  },
+  restoreInput: {
+    borderWidth: 1,
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    minHeight: 72,
+    fontSize: 14,
+    textAlignVertical: 'top',
+  },
   pressed: {
     opacity: 0.8,
+  },
+  privacyParagraph: {
+    marginBottom: Spacing.two,
   },
 });

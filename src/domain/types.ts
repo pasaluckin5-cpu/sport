@@ -15,33 +15,89 @@ export type Equipment =
 /** Training zones, ordered roughly from easiest to hardest effort. */
 export type Zone = 'recovery' | 'technique' | 'aerobicBase' | 'threshold' | 'vo2max' | 'sprint';
 
+export type DistanceUnit = 'meters' | 'yards';
+
+/** Pool course length, in the athlete's chosen unit (e.g. a 25m or 50m pool; a 25yd or 50yd pool). */
+export type PoolLength = 25 | 50;
+
+export type StrokeKey = 'freestyle' | 'im' | 'backstroke' | 'choice';
+
+/**
+ * What a main-set step actually is, kept as a key rather than a formatted sentence so the UI
+ * layer can translate it. Each kind maps to one i18n template (see src/i18n/format.ts).
+ */
+export type SetStepKind =
+  | 'warmupSwim'
+  | 'warmupPull'
+  | 'cooldown'
+  | 'drill'
+  | 'drillBuild'
+  | 'steadySwim'
+  | 'steadyKick'
+  | 'thresholdSwim'
+  | 'thresholdPull'
+  | 'vo2Swim'
+  | 'vo2Kick'
+  | 'sprintAllOut'
+  | 'sprintBuild'
+  | 'recoverySwim';
+
 export interface SetStep {
-  label: string;
-  distanceM: number;
+  kind: SetStepKind;
+  reps: number;
+  repDistance: number;
+  distance: number;
+  stroke?: StrokeKey;
+  /** Rest between reps, in seconds. A range (e.g. 15-20s) sets both restSec and restSecMax. */
+  restSec?: number;
+  restSecMax?: number;
+  /** Target time for repDistance, in seconds, when a pace benchmark is known. */
+  paceSec?: number;
   equipment: Equipment[];
   zone: Zone;
 }
 
 export interface PoolSession {
   zone: Zone;
-  title: string;
   durationMin: number;
   warmup: SetStep[];
   main: SetStep[];
   cooldown: SetStep[];
-  totalDistanceM: number;
+  totalDistance: number;
   equipmentUsed: Equipment[];
 }
 
 export type GymFocus = 'fullBody' | 'upperBody' | 'lowerBody' | 'core' | 'mobility';
 
+export type GymExercise =
+  | 'squats'
+  | 'pushUps'
+  | 'bentOverRows'
+  | 'plank'
+  | 'pullUps'
+  | 'benchPress'
+  | 'shoulderExternalRotation'
+  | 'tricepsDips'
+  | 'romanianDeadlift'
+  | 'walkingLunges'
+  | 'calfRaises'
+  | 'deadBug'
+  | 'russianTwists'
+  | 'hollowHold'
+  | 'shoulderDislocates'
+  | 'worldsGreatestStretch'
+  | 'thoracicRotations'
+  | 'ankleMobility'
+  | 'conditioningFinisher';
+
 export interface GymBlock {
-  label: string;
-  detail: string;
+  exercise: GymExercise;
+  sets: number;
+  /** Language-neutral reps/time notation, e.g. "10-12", "max", "30-45s". */
+  reps: string;
 }
 
 export interface GymSession {
-  title: string;
   durationMin: number;
   focus: GymFocus;
   blocks: GymBlock[];
@@ -51,11 +107,13 @@ export interface DayPlan {
   dayIndex: number; // 0 = Monday .. 6 = Sunday
   pool?: PoolSession;
   gym?: GymSession;
+  /** Whether this day's session(s) have been marked done (see src/state/history-context.tsx). */
+  completed?: boolean;
 }
 
 /** A recent time-trial result, e.g. "400m in 6:40", used to derive a real target pace. */
 export interface PaceBenchmark {
-  distanceM: number;
+  distance: number;
   timeSec: number;
 }
 
@@ -66,14 +124,18 @@ export interface AthleteProfile {
   poolSessionDurationMin: number; // minutes per pool session
   gymSessionsPerWeek: number; // 0-5
   equipment: Equipment[];
+  unit: DistanceUnit;
+  poolLength: PoolLength;
   /** Optional — when present, session volume and set paces are derived from this instead of the level table. */
   benchmark?: PaceBenchmark;
 }
 
 export interface WeekPlan {
   days: DayPlan[]; // length 7, Monday first
-  totalPoolDistanceM: number;
+  totalPoolDistance: number;
   generatedAt: string; // ISO timestamp
+  /** ISO week key (e.g. "2026-W08") this plan was generated for — see src/domain/week.ts. */
+  weekKey: string;
 }
 
-export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
+export const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
