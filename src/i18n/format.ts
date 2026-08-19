@@ -2,7 +2,7 @@ import type { TFunction } from 'i18next';
 
 import { findWorldRecord, nextRankTarget, rankForTime } from '@/domain/standards';
 import { focusEmphasis, formatPace100, specialtyFactor } from '@/domain/workoutLibrary';
-import { DayPlan, DistanceUnit, Gender, GymBlock, GymMode, PaceBenchmark, RaceStroke, SetStep, Zone } from '@/domain/types';
+import { DayPlan, DistanceUnit, Gender, GymBlock, GymMode, PaceBenchmark, PeriodizationPhase, RaceStroke, SetStep, Zone } from '@/domain/types';
 
 /** "m"/"yd" — a universal abbreviation, not translated per-language. */
 export function unitAbbrev(unit: DistanceUnit): string {
@@ -162,6 +162,16 @@ export function friendResultProgressText(
   t: TFunction,
 ): RecordsProgress {
   return buildRecordsProgress(gender, stroke, distance, timeSec, unit, t);
+}
+
+/**
+ * A short "coach note" for the athlete's current periodization phase (src/domain/
+ * periodization.ts), shown only when a goal race date is set. daysUntilRace < 0 (the date has
+ * passed) gets its own phrasing rather than a nonsensical negative day count.
+ */
+export function periodizationNoteText(phase: PeriodizationPhase, daysUntilRace: number, t: TFunction): string {
+  if (daysUntilRace < 0) return t('plan.periodization.pastRace');
+  return t(`plan.periodization.${phase}`, { days: daysUntilRace });
 }
 
 /** Plain-text rendering of a day's session(s), for sharing with a coach or training partner. */

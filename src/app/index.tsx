@@ -5,6 +5,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AthleteCoachPanel } from '@/components/athlete-coach-panel';
+import { ChipGroup } from '@/components/chip-group';
 import { FriendsPanel } from '@/components/friends-panel';
 import { Stepper } from '@/components/stepper';
 import { ThemedText } from '@/components/themed-text';
@@ -13,7 +14,8 @@ import { Collapsible } from '@/components/ui/collapsible';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { equipmentLabel } from '@/domain/equipment';
-import { AthleteProfile, DAY_KEYS, DayPlan, DistanceUnit } from '@/domain/types';
+import { daysUntilRace } from '@/domain/periodization';
+import { AthleteProfile, DAY_KEYS, DayPlan, Difficulty, DistanceUnit, PainArea } from '@/domain/types';
 import { basePace100Sec, formatPace100 } from '@/domain/workoutLibrary';
 import {
   focusNoteText,
@@ -21,6 +23,7 @@ import {
   formatGymBlock,
   formatSetStep,
   gymModeLabel,
+  periodizationNoteText,
   recordsProgressText,
   swimSessionTitle,
   unitAbbrev,
@@ -51,6 +54,55 @@ function CompletionToggle({
         {label}
       </ThemedText>
     </Pressable>
+  );
+}
+
+const DIFFICULTIES: Difficulty[] = ['easy', 'moderate', 'hard', 'tooHard'];
+const PAIN_AREAS: PainArea[] = ['shoulder', 'knee', 'back', 'other'];
+
+function FeedbackPrompt({ weekKey, dayIndex, kind }: { weekKey: string; dayIndex: number; kind: SessionKind }) {
+  const { t } = useTranslation();
+  const { isCompleted, getFeedback, setFeedback } = useHistory();
+  const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
+  const [pain, setPain] = useState<PainArea[]>([]);
+
+  if (!isCompleted(weekKey, dayIndex, kind)) return null;
+
+  const existing = getFeedback(weekKey, dayIndex, kind);
+  if (existing) {
+    return (
+      <ThemedText type="small" themeColor="textSecondary">
+        {t('plan.feedback.logged', { difficulty: t(`feedback.difficulty.${existing.difficulty}`) })}
+      </ThemedText>
+    );
+  }
+
+  function togglePain(area: PainArea) {
+    setPain((p) => (p.includes(area) ? p.filter((a) => a !== area) : [...p, area]));
+  }
+
+  return (
+    <View style={styles.feedbackBlock}>
+      <ThemedText type="small" themeColor="textSecondary">
+        {t('plan.feedback.prompt')}
+      </ThemedText>
+      <ChipGroup
+        options={DIFFICULTIES.map((d) => ({ value: d, label: t(`feedback.difficulty.${d}`) }))}
+        selected={difficulty ? [difficulty] : []}
+        onToggle={(v) => setDifficulty(v)}
+      />
+      <ChipGroup
+        options={PAIN_AREAS.map((p) => ({ value: p, label: t(`feedback.pain.${p}`) }))}
+        selected={pain}
+        onToggle={togglePain}
+      />
+      <Pressable
+        onPress={() => difficulty && setFeedback(weekKey, dayIndex, kind, { difficulty, pain: pain.length > 0 ? pain : undefined })}
+        disabled={!difficulty}
+        style={({ pressed }) => pressed && styles.pressed}>
+        <ThemedText type="link">{t('plan.feedback.submit')}</ThemedText>
+      </Pressable>
+    </View>
   );
 }
 
@@ -87,6 +139,7 @@ function DayCard({ day, weekKey, unit }: { day: DayPlan; weekKey: string; unit: 
       {day.pool && (
         <View style={styles.sessionBlock}>
           <CompletionToggle weekKey={weekKey} dayIndex={day.dayIndex} kind="pool" label={t('plan.markDone_pool')} />
+          <FeedbackPrompt weekKey={weekKey} dayIndex={day.dayIndex} kind="pool" />
           {(['warmup', 'main', 'cooldown'] as const).map((section) =>
             day.pool![section].length > 0 ? (
               <View key={section} style={styles.stepGroup}>
@@ -107,6 +160,7 @@ function DayCard({ day, weekKey, unit }: { day: DayPlan; weekKey: string; unit: 
       {day.gym && (
         <View style={styles.sessionBlock}>
           <CompletionToggle weekKey={weekKey} dayIndex={day.dayIndex} kind="gym" label={t('plan.markDone_gym')} />
+          <FeedbackPrompt weekKey={weekKey} dayIndex={day.dayIndex} kind="gym" />
           <ThemedText type="smallBold" themeColor="textSecondary">
             {t(`gymFocus.${day.gym.focus}`)} · {gymModeLabel(day.gym.mode, t)}
           </ThemedText>
@@ -312,6 +366,9 @@ export default function HomeScreen() {
   const gymSessions = weekPlan.days.filter((d) => d.gym).length;
   const abbrev = unitAbbrev(profile.unit);
   const focusNote = focusNoteText(profile.primaryStrokes, profile.primaryDistances, profile.unit, t);
+  const periodizationNote = weekPlan.periodizationPhase
+    ? periodizationNoteText(weekPlan.periodizationPhase, daysUntilRace(weekPlan.weekKey, profile.goalRaceDate) ?? 0, t)
+    : null;
 
   return (
     <ScrollView
@@ -337,6 +394,11 @@ export default function HomeScreen() {
           {focusNote && (
             <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
               {focusNote}
+            </ThemedText>
+          )}
+          {periodizationNote && (
+            <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+              {periodizationNote}
             </ThemedText>
           )}
           <Pressable onPress={() => router.navigate('/profile')} style={({ pressed }) => pressed && styles.pressed}>
@@ -415,6 +477,11 @@ const styles = StyleSheet.create({
   stepGroup: {
     gap: Spacing.half,
     marginBottom: Spacing.two,
+  },
+  feedbackBlock: {
+    gap: Spacing.one,
+    marginTop: Spacing.one,
+    marginBottom: Spacing.one,
   },
   progressRow: {
     flexDirection: 'row',

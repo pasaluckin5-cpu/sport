@@ -270,6 +270,19 @@ function ProfileForm() {
     }));
   }
 
+  const currentYear = new Date().getUTCFullYear();
+  const parsedRaceDate = form.goalRaceDate ? new Date(`${form.goalRaceDate}T00:00:00Z`) : undefined;
+  const raceYear = parsedRaceDate ? parsedRaceDate.getUTCFullYear() : currentYear;
+  const raceMonth = parsedRaceDate ? parsedRaceDate.getUTCMonth() + 1 : new Date().getUTCMonth() + 1;
+  const raceDay = parsedRaceDate ? parsedRaceDate.getUTCDate() : new Date().getUTCDate();
+
+  function setRaceDate(year: number, month: number, day: number) {
+    setSaved(false);
+    const mm = String(month).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    setForm((f) => ({ ...f, goalRaceDate: `${year}-${mm}-${dd}` }));
+  }
+
   async function handleCopyBackup() {
     if (!profile) return;
     await Clipboard.setStringAsync(JSON.stringify(profile));
@@ -458,6 +471,44 @@ function ProfileForm() {
                   onPress={() => {
                     setSaved(false);
                     setForm((f) => ({ ...f, benchmark: undefined }));
+                  }}
+                  style={({ pressed }) => pressed && styles.pressed}>
+                  <ThemedText type="link">{t('common.clear')}</ThemedText>
+                </Pressable>
+              )}
+            </FormSection>
+          )}
+
+          {isSwimming && (
+            <FormSection label={t('profile.section.goalRace')}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('profile.goalRace.hint')}
+              </ThemedText>
+              <ThemedView style={styles.timeRow}>
+                <ThemedView style={styles.timeField}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {t('profile.goalRace.year')}
+                  </ThemedText>
+                  <Stepper value={raceYear} min={currentYear} max={currentYear + 3} onChange={(v) => setRaceDate(v, raceMonth, raceDay)} />
+                </ThemedView>
+                <ThemedView style={styles.timeField}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {t('profile.goalRace.month')}
+                  </ThemedText>
+                  <Stepper value={raceMonth} min={1} max={12} onChange={(v) => setRaceDate(raceYear, v, raceDay)} />
+                </ThemedView>
+                <ThemedView style={styles.timeField}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {t('profile.goalRace.day')}
+                  </ThemedText>
+                  <Stepper value={raceDay} min={1} max={31} onChange={(v) => setRaceDate(raceYear, raceMonth, v)} />
+                </ThemedView>
+              </ThemedView>
+              {form.goalRaceDate && (
+                <Pressable
+                  onPress={() => {
+                    setSaved(false);
+                    setForm((f) => ({ ...f, goalRaceDate: undefined }));
                   }}
                   style={({ pressed }) => pressed && styles.pressed}>
                   <ThemedText type="link">{t('common.clear')}</ThemedText>

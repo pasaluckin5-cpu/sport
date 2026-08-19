@@ -160,6 +160,24 @@ export interface StrokeCountEntry {
   strokeCount: number;
 }
 
+/** How a completed session felt, logged by the athlete right after marking it done. */
+export type Difficulty = 'easy' | 'moderate' | 'hard' | 'tooHard';
+
+/** Where it hurt, if anywhere — 'other' covers anything not worth its own category. */
+export type PainArea = 'shoulder' | 'knee' | 'back' | 'other';
+
+export interface SessionFeedback {
+  difficulty: Difficulty;
+  pain?: PainArea[];
+}
+
+/**
+ * Standard athletic periodization phases, derived purely from days-until-race (see
+ * src/domain/periodization.ts) — base (general prep) -> build (increasing load) -> peak
+ * (race-specific, high-intensity) -> taper (volume cut before the race).
+ */
+export type PeriodizationPhase = 'base' | 'build' | 'peak' | 'taper';
+
 export interface AthleteProfile {
   level: AthleteLevel;
   goal: TrainingGoal;
@@ -179,6 +197,8 @@ export interface AthleteProfile {
   primaryDistances?: number[];
   /** Optional — only unlocks the world-record/ЕВСК-rank comparison in the Progress section. */
   gender?: Gender;
+  /** Optional goal race date (ISO yyyy-mm-dd). Drives periodization phase/volume — see periodization.ts. */
+  goalRaceDate?: string;
 }
 
 export interface WeekPlan {
@@ -187,6 +207,8 @@ export interface WeekPlan {
   generatedAt: string; // ISO timestamp
   /** ISO week key (e.g. "2026-W08") this plan was generated for — see src/domain/week.ts. */
   weekKey: string;
+  /** Only set when the athlete has a goalRaceDate — see src/domain/periodization.ts. */
+  periodizationPhase?: PeriodizationPhase;
 }
 
 export const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;

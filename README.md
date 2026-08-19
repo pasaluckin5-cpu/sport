@@ -24,11 +24,15 @@ It takes into account:
 
 The plan varies from week to week (zone order, stroke emphasis, and gym focus rotate on a
 weekly cycle) instead of being the exact same week forever, and you can mark sessions done and
-see a history of completed weeks. A "Progress" section lets you log stroke counts over a
-distance (a low-tech SWOLF-style efficiency tracker) and, if you set a gender and a freestyle
-time trial, compares your time against current world records and Russian ЕВСК classification
-standards, with a concrete next-rank goal to chase. The UI is available in English and Russian,
-switchable in the Profile tab.
+see a history of completed weeks. Right after marking a session done you can log how it felt
+(easy/moderate/hard/too hard) and flag any pain — a run of hard/too-hard sessions trims next
+week's volume, and any flagged shoulder pain immediately drops paddles and swaps upper-body gym
+work for mobility. Optionally set a goal race date and the plan periodizes toward it — base,
+build, peak, then a taper in the final week — instead of staying flat every week. A "Progress"
+section lets you log stroke counts over a distance (a low-tech SWOLF-style efficiency tracker)
+and, if you set a gender and a freestyle time trial, compares your time against current world
+records and Russian ЕВСК classification standards, with a concrete next-rank goal to chase. The
+UI is available in English and Russian, switchable in the Profile tab.
 
 The app is local-first: your profile is saved on-device and the week's plan is generated from
 it, no account or server required. You can always copy your profile as text (Profile → Backup &

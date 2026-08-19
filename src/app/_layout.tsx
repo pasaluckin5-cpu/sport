@@ -19,14 +19,14 @@ export default function TabLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <LanguageProvider>
         <AuthProvider>
-          <PlanProvider>
-            <HistoryProvider>
+          <HistoryProvider>
+            <PlanProvider>
               <StrokeLogProvider>
                 <AnimatedSplashOverlay />
                 <AppTabs />
               </StrokeLogProvider>
-            </HistoryProvider>
-          </PlanProvider>
+            </PlanProvider>
+          </HistoryProvider>
         </AuthProvider>
       </LanguageProvider>
     </ThemeProvider>

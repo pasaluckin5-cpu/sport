@@ -1,3 +1,5 @@
+import { avoidShoulderLoad, daysUntilRace, feedbackVolumeMultiplier, periodizationPhase, summarizeFeedback, volumeMultiplier } from './periodization';
+import { AthleteProfile, DayPlan, GymFocus, GymMode, PoolSession, SessionFeedback, TrainingGoal, WeekPlan, Zone } from './types';
 import {
   basePace100Sec,
   buildCooldown,
@@ -10,7 +12,6 @@ import {
   specialtyFactor,
   strokeFor,
 } from './workoutLibrary';
-import { AthleteProfile, DayPlan, GymFocus, GymMode, PoolSession, TrainingGoal, WeekPlan, Zone } from './types';
 import { isoWeekKey, rotateArray, weekKeyToOffset } from './week';
 
 export const DEFAULT_PROFILE: AthleteProfile = {
@@ -78,10 +79,14 @@ function assemblePoolSession(
   profile: AthleteProfile,
   sessionIndex: number,
   weekOffset: number,
+  volumeMult: number,
+  avoidShoulder: boolean,
 ): PoolSession {
-  const { level, poolSessionDurationMin: durationMin, equipment, unit, poolLength, benchmark, primaryStrokes, primaryDistances } =
-    profile;
-  const volume = sessionVolume(level, durationMin, unit, poolLength, benchmark);
+  const { level, poolSessionDurationMin: durationMin, unit, poolLength, benchmark, primaryStrokes, primaryDistances } = profile;
+  // Skip paddles (extra shoulder loading) for the week when recent feedback flagged shoulder
+  // pain — same "downgrade, don't drop the day" pattern already used for a hard-swim-eve leg day.
+  const equipment = avoidShoulder ? profile.equipment.filter((e) => e !== 'paddles') : profile.equipment;
+  const volume = sessionVolume(level, durationMin, unit, poolLength, benchmark) * volumeMult;
   const warmupDistance = roundToPoolLength(volume * 0.18, poolLength);
   const cooldownDistance = roundToPoolLength(volume * 0.12, poolLength);
   const mainDistance = Math.max(poolLength, volume - warmupDistance - cooldownDistance);
@@ -112,13 +117,28 @@ function assemblePoolSession(
   };
 }
 
+function roundGymDuration(minutes: number): number {
+  return Math.max(20, Math.round(minutes / 15) * 15);
+}
+
 export interface GenerateWeekPlanOptions {
   /** Overrides the current calendar week — mainly for tests. Defaults to today's ISO week. */
   weekKey?: string;
+  /**
+   * A handful of the athlete's most recent post-session feedback entries (see
+   * src/domain/periodization.ts's summarizeFeedback) — used to back volume off after a run of
+   * hard/painful sessions, or nudge it up after a run of easy ones. Empty/absent = neutral.
+   */
+  recentFeedback?: SessionFeedback[];
 }
 
 export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekPlanOptions = {}): WeekPlan {
   const weekKey = options.weekKey ?? isoWeekKey(new Date());
+
+  const phase = periodizationPhase(daysUntilRace(weekKey, profile.goalRaceDate));
+  const feedbackSummary = summarizeFeedback(options.recentFeedback);
+  const volumeMult = Math.min(1.1, Math.max(0.5, volumeMultiplier(phase) * feedbackVolumeMultiplier(feedbackSummary)));
+  const avoidShoulder = avoidShoulderLoad(feedbackSummary);
 
   const poolCount = clamp(profile.poolSessionsPerWeek, 0, 7);
   const poolDays = poolCount === 0 ? [] : (POOL_DAY_PATTERNS[poolCount] ?? POOL_DAY_PATTERNS[3]);
@@ -135,7 +155,7 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
   const days: DayPlan[] = Array.from({ length: 7 }, (_, dayIndex) => ({ dayIndex }));
 
   poolDays.forEach((dayIndex, i) => {
-    days[dayIndex].pool = assemblePoolSession(zones[i], profile, i, strokeOffset);
+    days[dayIndex].pool = assemblePoolSession(zones[i], profile, i, strokeOffset, volumeMult, avoidShoulder);
   });
 
   const gymCount = clamp(profile.gymSessionsPerWeek, 0, 7);
@@ -155,6 +175,7 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
   // consistently shape the gym split every week, not just some weeks — weekly variety already
   // comes from the swim side (and from which exact days gym lands on as gymCount changes).
   const gymFocusRotation = GYM_FOCUS_ROTATION_BY_GOAL[profile.goal];
+  const gymDuration = roundGymDuration(DEFAULT_GYM_DURATION_MIN * volumeMult);
   for (let i = 0; i < gymCount && i < gymDayCandidates.length; i++) {
     const dayIndex = gymDayCandidates[i];
     const nextDayPool = days[(dayIndex + 1) % 7].pool;
@@ -165,16 +186,20 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
       // Avoid pre-fatiguing the legs the day before a hard kick/sprint-heavy swim.
       focus = 'core';
     }
+    if (avoidShoulder && focus === 'upperBody') {
+      // Recent shoulder pain flagged — swap heavy pulling/pressing work for mobility this week.
+      focus = 'mobility';
+    }
 
     days[dayIndex].gym = {
-      durationMin: DEFAULT_GYM_DURATION_MIN,
+      durationMin: gymDuration,
       focus,
       mode: gymMode,
-      blocks: buildGymSession(focus, DEFAULT_GYM_DURATION_MIN, profile.level, gymMode),
+      blocks: buildGymSession(focus, gymDuration, profile.level, gymMode),
     };
   }
 
   const totalPoolDistance = days.reduce((sum, d) => sum + (d.pool?.totalDistance ?? 0), 0);
 
-  return { days, totalPoolDistance, generatedAt: new Date().toISOString(), weekKey };
+  return { days, totalPoolDistance, generatedAt: new Date().toISOString(), weekKey, periodizationPhase: phase };
 }

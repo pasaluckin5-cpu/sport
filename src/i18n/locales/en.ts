@@ -43,6 +43,18 @@ export default {
       generalFitness: 'General fitness',
     },
     focusNote: 'Specialty: {{subject}} — focus on {{emphasis}}.',
+    periodization: {
+      base: 'Base phase · {{days}} days to your goal race — building general fitness.',
+      build: 'Build phase · {{days}} days to your goal race — steadily raising training load.',
+      peak: 'Peak phase · {{days}} days to your goal race — race-specific, high-intensity work.',
+      taper: 'Taper phase · {{days}} days to your goal race — cutting volume so you arrive fresh.',
+      pastRace: 'Your goal race date has passed — back to base training for the next one.',
+    },
+    feedback: {
+      prompt: 'How did it feel?',
+      submit: 'Log feedback',
+      logged: 'Logged: {{difficulty}}',
+    },
     history: {
       title: 'History',
       empty: 'Completed sessions will show up here, grouped by week.',
@@ -78,6 +90,20 @@ export default {
       noStandard: 'No classification standard for this distance yet — try 100, 200, or 400.',
       disclaimer:
         'Reference data, not a live feed (world records ~early 2026; Russian ЕВСК standards, 2024–2026 cycle, freestyle only) — double-check against worldaquatics.com or your federation before relying on it for real certification.',
+    },
+  },
+  feedback: {
+    difficulty: {
+      easy: 'Easy',
+      moderate: 'Moderate',
+      hard: 'Hard',
+      tooHard: 'Too hard',
+    },
+    pain: {
+      shoulder: 'Shoulder',
+      knee: 'Knee',
+      back: 'Back',
+      other: 'Other',
     },
   },
   account: {
@@ -220,8 +246,15 @@ export default {
       strokes: 'Main strokes (optional)',
       distances: 'Main race distances (optional)',
       gender: 'Gender (optional)',
+      goalRace: 'Goal race date (optional)',
       language: 'Language',
       backup: 'Backup & restore',
+    },
+    goalRace: {
+      hint: "Set a target race date and your plan will automatically periodize toward it — building base fitness, then raising load, then race-specific work, then a taper in the final week. Leave it unset and you'll just get a steady week-to-week plan.",
+      year: 'Year',
+      month: 'Month',
+      day: 'Day',
     },
     genderHint: 'Only used to compare your time trial against gender-specific world records and Russian classification standards in the Progress section.',
     gender: {

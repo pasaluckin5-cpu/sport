@@ -25,3 +25,23 @@ export function rotateArray<T>(items: T[], offset: number): T[] {
   const shift = ((offset % items.length) + items.length) % items.length;
   return [...items.slice(shift), ...items.slice(0, shift)];
 }
+
+/**
+ * Inverse of isoWeekKey: the Monday (UTC midnight) of the given ISO week key. Used by
+ * periodization.ts to measure "days until race" from the week being generated rather than
+ * from "today", so generateWeekPlan stays a pure function of its inputs (same weekKey always
+ * yields the same days-until-race, whenever it's actually called).
+ */
+export function weekKeyToMonday(weekKey: string): Date {
+  const match = /^(\d{4})-W(\d{2})$/.exec(weekKey);
+  if (!match) return new Date(NaN);
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4DayNum = (jan4.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+  const week1Monday = new Date(jan4);
+  week1Monday.setUTCDate(jan4.getUTCDate() - jan4DayNum);
+  const monday = new Date(week1Monday);
+  monday.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
+  return monday;
+}

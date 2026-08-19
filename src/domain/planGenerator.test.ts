@@ -249,4 +249,77 @@ describe('generateWeekPlan', () => {
       }
     });
   });
+
+  describe('periodization: goal race date', () => {
+    it('leaves periodizationPhase undefined with no goal race date', () => {
+      const plan = generateWeekPlan(withProfile({ poolSessionsPerWeek: 3 }));
+      expect(plan.periodizationPhase).toBeUndefined();
+    });
+
+    it('sets a base-phase periodizationPhase far out from a goal race date', () => {
+      const plan = generateWeekPlan(withProfile({ poolSessionsPerWeek: 3, goalRaceDate: '2027-12-31' }), {
+        weekKey: '2026-W10',
+      });
+      expect(plan.periodizationPhase).toBe('base');
+    });
+
+    it('cuts pool volume in the taper week right before the goal race', () => {
+      const base = withProfile({ poolSessionsPerWeek: 3, poolSessionDurationMin: 60 });
+      const baselinePlan = generateWeekPlan(base, { weekKey: '2026-W10' });
+      // 2026-W10's Monday is 2026-03-02 — 5 days later is inside the taper window (<=7 days out).
+      const taperPlan = generateWeekPlan({ ...base, goalRaceDate: '2026-03-07' }, { weekKey: '2026-W10' });
+      expect(taperPlan.periodizationPhase).toBe('taper');
+      expect(taperPlan.totalPoolDistance).toBeLessThan(baselinePlan.totalPoolDistance);
+    });
+  });
+
+  describe('post-session feedback adaptation', () => {
+    it('reduces pool volume after a run of sessions logged as too hard', () => {
+      const profile = withProfile({ poolSessionsPerWeek: 3, poolSessionDurationMin: 60 });
+      const neutralPlan = generateWeekPlan(profile, { weekKey: '2026-W10' });
+      const struggledPlan = generateWeekPlan(profile, {
+        weekKey: '2026-W10',
+        recentFeedback: [{ difficulty: 'tooHard' }, { difficulty: 'tooHard' }, { difficulty: 'hard' }],
+      });
+      expect(struggledPlan.totalPoolDistance).toBeLessThan(neutralPlan.totalPoolDistance);
+    });
+
+    it('drops paddles and swaps upperBody gym focus to mobility after recent shoulder pain', () => {
+      const profile = withProfile({
+        poolSessionsPerWeek: 3,
+        gymSessionsPerWeek: 5,
+        equipment: ['paddles'],
+        goal: 'fitness',
+      });
+      const plan = generateWeekPlan(profile, {
+        weekKey: '2026-W10',
+        recentFeedback: [{ difficulty: 'hard', pain: ['shoulder'] }, { difficulty: 'moderate', pain: ['shoulder'] }],
+      });
+      for (const day of plan.days) {
+        if (day.pool) expect(day.pool.equipmentUsed).not.toContain('paddles');
+        if (day.gym) expect(day.gym.focus).not.toBe('upperBody');
+      }
+    });
+
+    it('reacts to shoulder pain from a single sample, but waits for 2+ samples before adjusting volume', () => {
+      const profile = withProfile({
+        poolSessionsPerWeek: 3,
+        gymSessionsPerWeek: 1,
+        equipment: ['paddles'],
+        goal: 'fitness',
+      });
+      const neutralPlan = generateWeekPlan(profile, { weekKey: '2026-W10' });
+      const onePainSamplePlan = generateWeekPlan(profile, {
+        weekKey: '2026-W10',
+        recentFeedback: [{ difficulty: 'hard', pain: ['shoulder'] }],
+      });
+      // Volume multiplier needs >=2 feedback samples to trust the "too hard" trend...
+      expect(onePainSamplePlan.totalPoolDistance).toBe(neutralPlan.totalPoolDistance);
+      // ...but shoulder-pain avoidance itself isn't gated on sample count — erring toward
+      // caution on injury risk matters more than waiting to confirm a trend.
+      for (const day of onePainSamplePlan.days) {
+        if (day.pool) expect(day.pool.equipmentUsed).not.toContain('paddles');
+      }
+    });
+  });
 });

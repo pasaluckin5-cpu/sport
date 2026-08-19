@@ -200,16 +200,61 @@ can and can't tell someone:
     knowledge-base description above): a smarter, better-grounded template, not a coach that
     watches the athlete swim.
 
+**Post-session feedback & periodization**: two more coach-like adaptation loops, both still
+computed rather than sensed — the app has no way to know how a session actually felt except
+what the athlete explicitly logs:
+- **Periodization** (`src/domain/periodization.ts`): an optional `AthleteProfile.goalRaceDate`
+  (ISO `yyyy-mm-dd`, set from a "Goal race date" Profile section that mirrors the benchmark
+  section's Stepper+clear-link pattern) drives a standard four-phase periodization —
+  base (general prep) → build (rising load) → peak (race-specific, high intensity) → taper
+  (volume cut in the final week) — bucketed purely by `daysUntilRace(weekKey, goalRaceDate)`
+  (via `week.ts`'s `weekKeyToMonday`, the inverse of `isoWeekKey`, so the calculation is anchored
+  to the week being generated rather than to "today" — keeping `generateWeekPlan` a pure
+  function of its inputs). `volumeMultiplier(phase)` (1.0 base/build, 0.9 peak, 0.65 taper) scales
+  both pool session volume (`sessionVolume(...) * volumeMult` in `assemblePoolSession`) and gym
+  session duration (rounded to the nearest 15 minutes, floor 20, via `roundGymDuration`).
+  `WeekPlan.periodizationPhase` is only set when a goal race date exists; the Plan screen shows a
+  short phase note (`periodizationNoteText` in `src/i18n/format.ts`) under the week summary, with
+  its own phrasing for a race date that's already passed (`daysUntilRace < 0`) rather than
+  showing a nonsensical negative day count.
+- **Post-session feedback** (`SessionFeedback` in `types.ts` — a `Difficulty`
+  `'easy'|'moderate'|'hard'|'tooHard'` plus optional `PainArea[]`): once a session is marked
+  done, the Plan screen's `FeedbackPrompt` (`src/app/index.tsx`) offers a one-time difficulty +
+  pain-area chip prompt; submitting calls `useHistory().setFeedback`, which widens the
+  completion-map value at that key from `true` to the full `SessionFeedback` object (`isCompleted`
+  still just checks truthiness, so both forms count as "done"). `HistoryProvider` exposes the
+  athlete's most recent entries as `recentFeedback` (newest six, by key-string sort), which
+  `PlanProvider` reads via `useHistory()` and passes into `generateWeekPlan`'s
+  `recentFeedback` option — this is why `HistoryProvider` was moved *above* `PlanProvider` in
+  `_layout.tsx`'s provider tree (a `PlanProvider` descendant can call `useHistory()`; the reverse
+  nesting couldn't). `summarizeFeedback` folds those entries into an average difficulty score
+  and a `shoulderPainFlagged` bool; `feedbackVolumeMultiplier` backs volume off after a
+  hard/too-hard run (and nudges it up after an easy one) but *requires at least 2 samples* to
+  act, since one bad day shouldn't swing the whole week — deliberately different from
+  `avoidShoulderLoad`, which reacts to a *single* flagged sample immediately (erring toward
+  caution on injury risk beats waiting to confirm a trend). Shoulder-pain avoidance reuses the
+  existing "downgrade a day, don't drop it" pattern already established for hard-swim-eve leg
+  days: `paddles` is filtered out of the athlete's equipment for that week's pool sets, and an
+  `upperBody` gym-focus day is swapped to `mobility`. The periodization and feedback volume
+  multipliers combine (`Math.min(1.1, Math.max(0.5, ...))`, clamped) rather than being mutually
+  exclusive — a taper week with a recent hard-session run compounds toward less volume, not more.
+  Feedback objects are stored locally only (`CompletionValue = true | SessionFeedback` in
+  `history-storage.ts`); the Supabase `completions` table still only tracks a boolean per row (no
+  feedback column), so on sign-in the cloud-merge effect in `history-context.tsx` layers any
+  locally-logged feedback objects back on top of the cloud completion map rather than letting a
+  plain-boolean cloud row silently overwrite a richer local one.
+
 **Weekly variation & history**: nothing about a *profile* changes week to week, but
 `generateWeekPlan`'s week-key rotation (above) means the actual zone order, stroke emphasis,
 and gym-focus order differ across calendar weeks even for an unchanged profile — so the plan
 isn't the same static week forever, without needing to persist multiple weeks of plan data.
 Completed sessions are tracked separately from the plan: `src/state/history-context.tsx`
-(`HistoryProvider`/`useHistory`) persists a flat `{ "weekKey:dayIndex:kind": true }` map via
-`src/storage/history-storage.ts` (`kind` is `'pool' | 'gym'`, so a double day tracks each half
-independently). The Plan screen's "History" section summarizes counts per week from that same
-map — there's no need to snapshot old `WeekPlan`s since the map only needs *counts*, not what
-was in each session.
+(`HistoryProvider`/`useHistory`) persists a flat `{ "weekKey:dayIndex:kind": true | SessionFeedback }`
+map via `src/storage/history-storage.ts` (`kind` is `'pool' | 'gym'`, so a double day tracks each
+half independently — see "Post-session feedback & periodization" above for the `SessionFeedback`
+value). The Plan screen's "History" section summarizes counts per week from that same map —
+there's no need to snapshot old `WeekPlan`s since the map only needs *counts*, not what was in
+each session.
 
 **i18n**: `src/i18n/index.ts` initializes a shared `i18next` instance with `en`/`ru` resources
 (`src/i18n/locales/{en,ru}.ts`, plain TS objects — not JSON — for type-checked keys) and
