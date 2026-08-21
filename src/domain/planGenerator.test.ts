@@ -279,7 +279,7 @@ describe('generateWeekPlan', () => {
       const neutralPlan = generateWeekPlan(profile, { weekKey: '2026-W10' });
       const struggledPlan = generateWeekPlan(profile, {
         weekKey: '2026-W10',
-        recentFeedback: [{ difficulty: 'tooHard' }, { difficulty: 'tooHard' }, { difficulty: 'hard' }],
+        feedbackHistory: [{ difficulty: 'tooHard' }, { difficulty: 'tooHard' }, { difficulty: 'hard' }],
       });
       expect(struggledPlan.totalPoolDistance).toBeLessThan(neutralPlan.totalPoolDistance);
     });
@@ -293,7 +293,7 @@ describe('generateWeekPlan', () => {
       });
       const plan = generateWeekPlan(profile, {
         weekKey: '2026-W10',
-        recentFeedback: [{ difficulty: 'hard', pain: ['shoulder'] }, { difficulty: 'moderate', pain: ['shoulder'] }],
+        feedbackHistory: [{ difficulty: 'hard', pain: ['shoulder'] }, { difficulty: 'moderate', pain: ['shoulder'] }],
       });
       for (const day of plan.days) {
         if (day.pool) expect(day.pool.equipmentUsed).not.toContain('paddles');
@@ -311,7 +311,7 @@ describe('generateWeekPlan', () => {
       const neutralPlan = generateWeekPlan(profile, { weekKey: '2026-W10' });
       const onePainSamplePlan = generateWeekPlan(profile, {
         weekKey: '2026-W10',
-        recentFeedback: [{ difficulty: 'hard', pain: ['shoulder'] }],
+        feedbackHistory: [{ difficulty: 'hard', pain: ['shoulder'] }],
       });
       // Volume multiplier needs >=2 feedback samples to trust the "too hard" trend...
       expect(onePainSamplePlan.totalPoolDistance).toBe(neutralPlan.totalPoolDistance);

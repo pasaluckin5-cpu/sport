@@ -2,7 +2,19 @@ import type { TFunction } from 'i18next';
 
 import { findWorldRecord, nextRankTarget, rankForTime } from '@/domain/standards';
 import { focusEmphasis, formatPace100, specialtyFactor } from '@/domain/workoutLibrary';
-import { DayPlan, DistanceUnit, Gender, GymBlock, GymMode, PaceBenchmark, PeriodizationPhase, RaceStroke, SetStep, Zone } from '@/domain/types';
+import {
+  DayPlan,
+  DistanceUnit,
+  Gender,
+  GymBlock,
+  GymMode,
+  PaceBenchmark,
+  PeriodizationPhase,
+  RaceDayPlan,
+  RaceStroke,
+  SetStep,
+  Zone,
+} from '@/domain/types';
 
 /** "m"/"yd" — a universal abbreviation, not translated per-language. */
 export function unitAbbrev(unit: DistanceUnit): string {
@@ -172,6 +184,26 @@ export function friendResultProgressText(
 export function periodizationNoteText(phase: PeriodizationPhase, daysUntilRace: number, t: TFunction): string {
   if (daysUntilRace < 0) return t('plan.periodization.pastRace');
   return t(`plan.periodization.${phase}`, { days: daysUntilRace });
+}
+
+/** Pacing line for a race-day plan — falls back to effort-based text when there's no benchmark pace to derive exact splits from. */
+export function raceDayPacingText(plan: RaceDayPlan, unit: DistanceUnit, t: TFunction): string {
+  const abbrev = unitAbbrev(unit);
+  if (plan.totalTargetSec === undefined || !plan.splits) {
+    return t(`raceDay.pacing.noBenchmark.${plan.pacingStrategy}`, { distance: plan.raceDistance, unit: abbrev });
+  }
+  const [firstHalf, secondHalf] = plan.splits;
+  return t(`raceDay.pacing.${plan.pacingStrategy}`, {
+    distance: plan.raceDistance,
+    unit: abbrev,
+    total: formatPace100(plan.totalTargetSec),
+    firstHalf: formatPace100(firstHalf.targetSec),
+    secondHalf: formatPace100(secondHalf.targetSec),
+  });
+}
+
+export function raceTacticText(key: RaceDayPlan['tacticalNotes'][number], t: TFunction): string {
+  return t(`raceDay.tactic.${key}`);
 }
 
 /** Plain-text rendering of a day's session(s), for sharing with a coach or training partner. */

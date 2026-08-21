@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { SessionFeedback } from '@/domain/types';
+import { SessionFeedback, WeekCompletionCount } from '@/domain/types';
 import { CompletionMap, loadHistory, saveHistory } from '@/storage/history-storage';
 import { bulkUploadCompletions, fetchCloudCompletions, setCloudCompletion } from '@/supabase/sync';
 
@@ -8,23 +8,22 @@ import { useAuth } from './auth-context';
 
 export type SessionKind = 'pool' | 'gym';
 
-export interface WeekCompletionCount {
-  weekKey: string;
-  count: number;
-}
-
 interface HistoryContextValue {
   isReady: boolean;
   isCompleted: (weekKey: string, dayIndex: number, kind: SessionKind) => boolean;
   toggleCompleted: (weekKey: string, dayIndex: number, kind: SessionKind) => void;
   getFeedback: (weekKey: string, dayIndex: number, kind: SessionKind) => SessionFeedback | undefined;
   setFeedback: (weekKey: string, dayIndex: number, kind: SessionKind, feedback: SessionFeedback) => void;
-  /** The athlete's most recent logged session feedback entries, newest first — see periodization.ts. */
-  recentFeedback: SessionFeedback[];
+  /**
+   * The athlete's logged session feedback history, newest first — see periodization.ts's
+   * summarizeFeedback/overloadedZones, which weight recency via an exponential moving average
+   * rather than needing this capped to a tiny window.
+   */
+  feedbackHistory: SessionFeedback[];
   weekCounts: WeekCompletionCount[];
 }
 
-const RECENT_FEEDBACK_LIMIT = 6;
+const FEEDBACK_HISTORY_LIMIT = 60;
 
 function completionKey(weekKey: string, dayIndex: number, kind: SessionKind): string {
   return `${weekKey}:${dayIndex}:${kind}`;
@@ -88,16 +87,16 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       .map(([weekKey, count]) => ({ weekKey, count }))
       .sort((a, b) => (a.weekKey < b.weekKey ? 1 : -1));
 
-    const recentFeedback = Object.entries(history)
+    const feedbackHistory = Object.entries(history)
       .filter((entry): entry is [string, SessionFeedback] => typeof entry[1] === 'object')
       .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-      .slice(0, RECENT_FEEDBACK_LIMIT)
+      .slice(0, FEEDBACK_HISTORY_LIMIT)
       .map(([, feedback]) => feedback);
 
     return {
       isReady,
       weekCounts,
-      recentFeedback,
+      feedbackHistory,
       isCompleted: (weekKey, dayIndex, kind) => !!history[completionKey(weekKey, dayIndex, kind)],
       getFeedback: (weekKey, dayIndex, kind) => {
         const v = history[completionKey(weekKey, dayIndex, kind)];

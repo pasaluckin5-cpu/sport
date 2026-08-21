@@ -62,6 +62,36 @@ export default {
       weekSummary_other: '{{week}} · {{count}} sessions completed',
     },
   },
+  raceDay: {
+    title: 'Race day plan',
+    warmupTitle: 'Pre-race warmup',
+    pacingTitle: 'Pacing',
+    tacticsTitle: 'Race tactics',
+    pacing: {
+      evenSplit:
+        'Target: {{total}} for {{distance}}{{unit}} — aim for an even effort throughout, roughly {{firstHalf}} / {{secondHalf}} for each half.',
+      negativeSplit:
+        'Target: {{total}} for {{distance}}{{unit}} — go out controlled and finish faster: roughly {{firstHalf}} for the first half, {{secondHalf}} for the second (negative split).',
+      noBenchmark: {
+        evenSplit:
+          "No recent time trial to target an exact time — race {{distance}}{{unit}} at an even, hard-but-sustainable effort throughout, don't go out faster than you can hold.",
+        negativeSplit:
+          'No recent time trial to target an exact time — race {{distance}}{{unit}} controlled through the first half and build to a faster finish (negative split).',
+      },
+    },
+    tactic: {
+      sprintStart: 'This is a sprint — the start is a huge share of the race. Explosive dive, streamline as long as you can hold it.',
+      sprintNoBreathOff: "Don't breathe on the first stroke (or the first few) off the start and each turn — head position costs more speed than the air is worth.",
+      distancePacing: "Don't go out too fast — settle into your target pace within the first 100 and hold it; going out too hard is the single most common way to blow up a distance race.",
+      distanceSighting: 'In open or crowded water, sight/count strokes between breaths to hold a straight line — wandering off course adds real distance.',
+      middleDistanceBuild: 'Controlled through the first half, then build through the third quarter and hold on for the last length — this is where races like this are usually won or lost.',
+      turnsBreakouts: 'Fast, tight turns and a strong breakout (kick underwater to the legal limit) are free speed — they cost nothing extra in energy for real time gained.',
+      strokeBreaststrokePullout: 'Every pullout (one pull, one kick, then breakout) is worth practicing to exhaustion — it is a bigger share of a breaststroke race than any other stroke.',
+      strokeButterflyRhythm: "Find your rhythm early and protect it — don't let the arms rush ahead of the kick, that's what causes butterfly to fall apart late in a race.",
+      strokeBackstrokeCounting: 'Count strokes to the wall on your final approach in every race-pace rep this week, so you don\'t have to look for the wall or crash into it on race day.',
+      strokeFreestyleBilateral: 'Keep bilateral breathing awareness even under race stress — a good, symmetric stroke holds up better as fatigue sets in than a one-sided one.',
+    },
+  },
   progress: {
     title: 'Progress',
     strokeLog: {
@@ -358,6 +388,7 @@ export default {
     sprintAllOut: 'all-out sprint, full recovery',
     sprintBuild: '{{stroke}} build, easy to fast',
     recoverySwim: 'easy continuous {{stroke}} swim, conversational effort',
+    raceStartPractice: 'practice starts, {{stroke}}, full recovery',
   },
   equipment: {
     fins: { label: 'Fins', description: 'Boosts kick power and ankle flexibility, used for kick sets and sprint work.' },

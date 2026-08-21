@@ -15,7 +15,8 @@ import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { equipmentLabel } from '@/domain/equipment';
 import { daysUntilRace } from '@/domain/periodization';
-import { AthleteProfile, DAY_KEYS, DayPlan, Difficulty, DistanceUnit, PainArea } from '@/domain/types';
+import { buildRaceDayPlan } from '@/domain/raceDayPlan';
+import { AthleteProfile, DAY_KEYS, DayPlan, Difficulty, DistanceUnit, PainArea, Zone } from '@/domain/types';
 import { basePace100Sec, formatPace100 } from '@/domain/workoutLibrary';
 import {
   focusNoteText,
@@ -24,6 +25,8 @@ import {
   formatSetStep,
   gymModeLabel,
   periodizationNoteText,
+  raceDayPacingText,
+  raceTacticText,
   recordsProgressText,
   swimSessionTitle,
   unitAbbrev,
@@ -60,7 +63,17 @@ function CompletionToggle({
 const DIFFICULTIES: Difficulty[] = ['easy', 'moderate', 'hard', 'tooHard'];
 const PAIN_AREAS: PainArea[] = ['shoulder', 'knee', 'back', 'other'];
 
-function FeedbackPrompt({ weekKey, dayIndex, kind }: { weekKey: string; dayIndex: number; kind: SessionKind }) {
+function FeedbackPrompt({
+  weekKey,
+  dayIndex,
+  kind,
+  zone,
+}: {
+  weekKey: string;
+  dayIndex: number;
+  kind: SessionKind;
+  zone?: Zone;
+}) {
   const { t } = useTranslation();
   const { isCompleted, getFeedback, setFeedback } = useHistory();
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
@@ -97,7 +110,9 @@ function FeedbackPrompt({ weekKey, dayIndex, kind }: { weekKey: string; dayIndex
         onToggle={togglePain}
       />
       <Pressable
-        onPress={() => difficulty && setFeedback(weekKey, dayIndex, kind, { difficulty, pain: pain.length > 0 ? pain : undefined })}
+        onPress={() =>
+          difficulty && setFeedback(weekKey, dayIndex, kind, { difficulty, pain: pain.length > 0 ? pain : undefined, zone })
+        }
         disabled={!difficulty}
         style={({ pressed }) => pressed && styles.pressed}>
         <ThemedText type="link">{t('plan.feedback.submit')}</ThemedText>
@@ -139,7 +154,7 @@ function DayCard({ day, weekKey, unit }: { day: DayPlan; weekKey: string; unit: 
       {day.pool && (
         <View style={styles.sessionBlock}>
           <CompletionToggle weekKey={weekKey} dayIndex={day.dayIndex} kind="pool" label={t('plan.markDone_pool')} />
-          <FeedbackPrompt weekKey={weekKey} dayIndex={day.dayIndex} kind="pool" />
+          <FeedbackPrompt weekKey={weekKey} dayIndex={day.dayIndex} kind="pool" zone={day.pool.zone} />
           {(['warmup', 'main', 'cooldown'] as const).map((section) =>
             day.pool![section].length > 0 ? (
               <View key={section} style={styles.stepGroup}>
@@ -176,6 +191,43 @@ function DayCard({ day, weekKey, unit }: { day: DayPlan; weekKey: string; unit: 
           {t('plan.restDayHint')}
         </ThemedText>
       )}
+    </Collapsible>
+  );
+}
+
+function RaceDaySection({ profile }: { profile: AthleteProfile }) {
+  const { t } = useTranslation();
+  const plan = buildRaceDayPlan(profile);
+  if (!plan) return null;
+
+  return (
+    <Collapsible title={t('raceDay.title')}>
+      <View style={styles.sessionBlock}>
+        <ThemedText type="smallBold" themeColor="textSecondary">
+          {t('raceDay.warmupTitle')}
+        </ThemedText>
+        {plan.warmup.map((step, i) => (
+          <ThemedText key={i} type="small">
+            • {formatSetStep(step, t, profile.unit)}
+          </ThemedText>
+        ))}
+      </View>
+      <View style={styles.sessionBlock}>
+        <ThemedText type="smallBold" themeColor="textSecondary">
+          {t('raceDay.pacingTitle')}
+        </ThemedText>
+        <ThemedText type="small">{raceDayPacingText(plan, profile.unit, t)}</ThemedText>
+      </View>
+      <View style={styles.sessionBlock}>
+        <ThemedText type="smallBold" themeColor="textSecondary">
+          {t('raceDay.tacticsTitle')}
+        </ThemedText>
+        {plan.tacticalNotes.map((key) => (
+          <ThemedText key={key} type="small">
+            • {raceTacticText(key, t)}
+          </ThemedText>
+        ))}
+      </View>
     </Collapsible>
   );
 }
@@ -412,6 +464,9 @@ export default function HomeScreen() {
               <DayCard day={day} weekKey={weekPlan.weekKey} unit={profile.unit} />
             </Fragment>
           ))}
+          {(weekPlan.periodizationPhase === 'peak' || weekPlan.periodizationPhase === 'taper') && (
+            <RaceDaySection profile={profile} />
+          )}
           <HistorySection />
           <ProgressSection profile={profile} />
           <AthleteCoachPanel />

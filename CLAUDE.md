@@ -217,32 +217,78 @@ what the athlete explicitly logs:
   short phase note (`periodizationNoteText` in `src/i18n/format.ts`) under the week summary, with
   its own phrasing for a race date that's already passed (`daysUntilRace < 0`) rather than
   showing a nonsensical negative day count.
-- **Post-session feedback** (`SessionFeedback` in `types.ts` — a `Difficulty`
-  `'easy'|'moderate'|'hard'|'tooHard'` plus optional `PainArea[]`): once a session is marked
-  done, the Plan screen's `FeedbackPrompt` (`src/app/index.tsx`) offers a one-time difficulty +
-  pain-area chip prompt; submitting calls `useHistory().setFeedback`, which widens the
-  completion-map value at that key from `true` to the full `SessionFeedback` object (`isCompleted`
-  still just checks truthiness, so both forms count as "done"). `HistoryProvider` exposes the
-  athlete's most recent entries as `recentFeedback` (newest six, by key-string sort), which
-  `PlanProvider` reads via `useHistory()` and passes into `generateWeekPlan`'s
-  `recentFeedback` option — this is why `HistoryProvider` was moved *above* `PlanProvider` in
-  `_layout.tsx`'s provider tree (a `PlanProvider` descendant can call `useHistory()`; the reverse
-  nesting couldn't). `summarizeFeedback` folds those entries into an average difficulty score
-  and a `shoulderPainFlagged` bool; `feedbackVolumeMultiplier` backs volume off after a
-  hard/too-hard run (and nudges it up after an easy one) but *requires at least 2 samples* to
-  act, since one bad day shouldn't swing the whole week — deliberately different from
-  `avoidShoulderLoad`, which reacts to a *single* flagged sample immediately (erring toward
-  caution on injury risk beats waiting to confirm a trend). Shoulder-pain avoidance reuses the
-  existing "downgrade a day, don't drop it" pattern already established for hard-swim-eve leg
-  days: `paddles` is filtered out of the athlete's equipment for that week's pool sets, and an
-  `upperBody` gym-focus day is swapped to `mobility`. The periodization and feedback volume
-  multipliers combine (`Math.min(1.1, Math.max(0.5, ...))`, clamped) rather than being mutually
-  exclusive — a taper week with a recent hard-session run compounds toward less volume, not more.
+- **Post-session feedback, long-term** (`SessionFeedback` in `types.ts` — a `Difficulty`
+  `'easy'|'moderate'|'hard'|'tooHard'` plus optional `PainArea[]` and optional `zone` — the zone
+  the pool session was, so the generator can learn *which* zone is the problem, not just that
+  "sessions in general" feel hard): once a session is marked done, the Plan screen's
+  `FeedbackPrompt` (`src/app/index.tsx`) offers a one-time difficulty + pain-area chip prompt;
+  submitting calls `useHistory().setFeedback`, which widens the completion-map value at that key
+  from `true` to the full `SessionFeedback` object (`isCompleted` still just checks truthiness,
+  so both forms count as "done"). `HistoryProvider` exposes the athlete's *entire* logged
+  feedback history (newest first, capped at 60 entries — several months to a year of training,
+  not a handful of sessions) as `feedbackHistory`, which `PlanProvider` reads via `useHistory()`
+  and passes into `generateWeekPlan`'s `feedbackHistory` option — this is why `HistoryProvider`
+  was moved *above* `PlanProvider` in `_layout.tsx`'s provider tree (a `PlanProvider` descendant
+  can call `useHistory()`; the reverse nesting couldn't). Rather than a flat average of a fixed
+  recent window, `summarizeFeedback` (`src/domain/periodization.ts`) folds the *whole* history
+  into an exponential moving average (`EMA_ALPHA = 0.3`) — a difficulty trend that keeps
+  adapting as new sessions come in while older entries fade in influence gradually instead of
+  dropping out abruptly at a cutoff, so the plan keeps responding to changes over the athlete's
+  full training history rather than just the last handful of sessions. `feedbackVolumeMultiplier`
+  backs volume off after a trend toward hard/too-hard (and nudges it up after a trend toward
+  easy) but *requires at least 2 samples* to act, since one bad day shouldn't swing the whole
+  week — deliberately different from `avoidShoulderLoad`, which looks at only the most recent 4
+  entries and reacts to a *single* flagged sample immediately (erring toward caution on injury
+  risk beats waiting to confirm a trend, and a strain from months ago shouldn't permanently
+  restrict equipment). Shoulder-pain avoidance reuses the existing "downgrade a day, don't drop
+  it" pattern already established for hard-swim-eve leg days: `paddles` is filtered out of the
+  athlete's equipment for that week's pool sets, and an `upperBody` gym-focus day is swapped to
+  `mobility`. `overloadedZones` computes a *per-zone* EMA (only from entries that recorded a
+  zone, needing 3+ samples for that zone before acting) and surfaces zones the athlete has
+  *consistently* found too hard; `easeOverloadedZones` swaps those specific zones for an easier
+  default (`sprint`/`vo2max`/`threshold` → `aerobicBase`) in that week's rotation — a more
+  targeted response than a global volume cut when it's really "always struggles with sprint sets"
+  rather than "training in general is too much." `adherenceRatio` adds a third, independent
+  signal: how much of the athlete's expected weekly session count (pool + gym) they've actually
+  completed over the last 3 weeks with history (excluding the current, naturally-incomplete
+  week) — a sustained low ratio means the schedule isn't sticking, which isn't necessarily a
+  difficulty problem, so `adherenceVolumeMultiplier` eases volume back on that basis too. All
+  three multipliers (periodization phase, feedback trend, adherence) combine
+  (`Math.min(1.1, Math.max(0.5, ...))`, clamped) rather than being mutually exclusive — a taper
+  week with a recent hard-session run and low adherence compounds toward less volume, not more.
   Feedback objects are stored locally only (`CompletionValue = true | SessionFeedback` in
   `history-storage.ts`); the Supabase `completions` table still only tracks a boolean per row (no
   feedback column), so on sign-in the cloud-merge effect in `history-context.tsx` layers any
   locally-logged feedback objects back on top of the cloud completion map rather than letting a
-  plain-boolean cloud row silently overwrite a richer local one.
+  plain-boolean cloud row silently overwrite a richer local one. This is still a hand-tuned
+  statistical model reading the athlete's own logged history, not a trained ML model — but it is
+  a genuine long-term-adapting one (EMA + per-zone tracking + adherence), not a flat average of
+  the last few sessions.
+
+**Race day plan** (`src/domain/raceDayPlan.ts`): a pre-race warmup/pacing/tactics plan, built only
+when the athlete has a `goalRaceDate` and swims (`poolSessionsPerWeek > 0`) — deliberately tied to
+an actual upcoming race rather than being a generic "how to race" reference. Race distance/stroke
+default to the athlete's first stated `primaryDistances`/`primaryStrokes` entry, falling back to
+the benchmark distance or plain 100m freestyle when unset. `buildRaceWarmup`
+(`workoutLibrary.ts`) is a *different* warmup from practice (`buildWarmup`) — built to end with
+the body remembering exactly what race effort feels like rather than to build aerobic volume: an
+easy loosening swim, a technique drill, a progressive build set, a new `raceStartPractice`
+`SetStepKind` (starts off an imaginary block), then 1-2 short reps at/just faster than goal race
+pace, finishing with an easy swim-down. `raceDayPacingStrategy` recommends `evenSplit` for races
+under 400 and `negativeSplit` (deliberately never `positiveSplit` — going out too fast is a
+mistake, not a strategy) for 400+; `raceDaySplits` derives half-race target times from the
+athlete's benchmark pace (first half ~3% slower than even pace, second half ~3% faster for a
+negative split, so they still average to the same overall target) — omitted entirely when no
+benchmark is set, falling back to effort-based pacing text instead of a fabricated exact time.
+`raceTacticalNotes` returns typed `RaceTacticKey`s (not formatted sentences — same
+structured-output pattern as `SetStepKind`/`GymExercise`, translated by `src/i18n/format.ts`'s
+`raceTacticText`) bucketed by distance (sprint/middle-distance/distance-specific cues) plus one
+stroke-specific tactic for each of the four solo strokes (IM gets none — its tactics are mostly
+about transitions between strokes, out of scope for now). The Plan screen's `RaceDaySection`
+(`src/app/index.tsx`) only renders once the race is close — `periodizationPhase` is `'peak'` or
+`'taper'` — rather than showing a full race-day protocol many weeks out when it isn't actionable
+yet. This is templated coaching knowledge (real, standard pacing/tactics principles), not a
+strategy generated from watching how the athlete actually swims.
 
 **Weekly variation & history**: nothing about a *profile* changes week to week, but
 `generateWeekPlan`'s week-key rotation (above) means the actual zone order, stroke emphasis,

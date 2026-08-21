@@ -21,7 +21,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<AthleteProfile | null>(null);
   const [isReady, setIsReady] = useState(false);
   const { session } = useAuth();
-  const { recentFeedback } = useHistory();
+  const { feedbackHistory, weekCounts } = useHistory();
 
   useEffect(() => {
     let cancelled = false;
@@ -61,8 +61,8 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   }, [session?.user.id, isReady]);
 
   const weekPlan = useMemo(
-    () => (profile ? generateWeekPlan(profile, { recentFeedback }) : null),
-    [profile, recentFeedback],
+    () => (profile ? generateWeekPlan(profile, { feedbackHistory, recentWeekCounts: weekCounts }) : null),
+    [profile, feedbackHistory, weekCounts],
   );
 
   const value = useMemo<PlanContextValue>(

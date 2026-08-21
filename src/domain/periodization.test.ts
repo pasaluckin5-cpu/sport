@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  adherenceRatio,
+  adherenceVolumeMultiplier,
   avoidShoulderLoad,
   daysUntilRace,
+  easeOverloadedZones,
   feedbackVolumeMultiplier,
+  overloadedZones,
   periodizationPhase,
   summarizeFeedback,
   volumeMultiplier,
 } from './periodization';
-import { SessionFeedback } from './types';
+import { SessionFeedback, WeekCompletionCount, Zone } from './types';
 import { isoWeekKey, weekKeyToMonday } from './week';
 
 describe('weekKeyToMonday', () => {
@@ -79,13 +83,13 @@ describe('volumeMultiplier', () => {
 describe('summarizeFeedback', () => {
   it('defaults to a neutral summary with no feedback', () => {
     const summary = summarizeFeedback([]);
-    expect(summary.avgDifficultyScore).toBe(0.5);
+    expect(summary.emaDifficultyScore).toBe(0.5);
     expect(summary.shoulderPainFlagged).toBe(false);
     expect(summary.sampleCount).toBe(0);
   });
 
-  it('flags shoulder pain when any recent entry logged it', () => {
-    const entries: SessionFeedback[] = [{ difficulty: 'moderate' }, { difficulty: 'hard', pain: ['shoulder'] }];
+  it('flags shoulder pain when a recent entry logged it', () => {
+    const entries: SessionFeedback[] = [{ difficulty: 'hard', pain: ['shoulder'] }, { difficulty: 'moderate' }];
     expect(summarizeFeedback(entries).shoulderPainFlagged).toBe(true);
   });
 
@@ -94,34 +98,163 @@ describe('summarizeFeedback', () => {
     expect(summarizeFeedback(entries).shoulderPainFlagged).toBe(false);
   });
 
-  it('averages difficulty scores toward the "too hard" end when sessions were logged tough', () => {
-    const entries: SessionFeedback[] = [{ difficulty: 'tooHard' }, { difficulty: 'tooHard' }];
-    expect(summarizeFeedback(entries).avgDifficultyScore).toBe(1);
+  it('ignores an old shoulder-pain flag once it has fallen out of the recent window', () => {
+    // Newest first: 4 pain-free sessions logged since the one flagged shoulder pain.
+    const entries: SessionFeedback[] = [
+      { difficulty: 'easy' },
+      { difficulty: 'easy' },
+      { difficulty: 'easy' },
+      { difficulty: 'easy' },
+      { difficulty: 'hard', pain: ['shoulder'] },
+    ];
+    expect(summarizeFeedback(entries).shoulderPainFlagged).toBe(false);
+  });
+
+  it('scores a uniformly tough history at 1 regardless of length', () => {
+    const entries: SessionFeedback[] = [{ difficulty: 'tooHard' }, { difficulty: 'tooHard' }, { difficulty: 'tooHard' }];
+    expect(summarizeFeedback(entries).emaDifficultyScore).toBe(1);
+  });
+
+  it('weights recent sessions more than a flat average would (adapts as new data comes in)', () => {
+    // Newest first: a long run of "easy" recently, after an older run of "tooHard".
+    const trendingEasier: SessionFeedback[] = [
+      { difficulty: 'easy' },
+      { difficulty: 'easy' },
+      { difficulty: 'easy' },
+      { difficulty: 'easy' },
+      { difficulty: 'tooHard' },
+      { difficulty: 'tooHard' },
+      { difficulty: 'tooHard' },
+      { difficulty: 'tooHard' },
+    ];
+    const flatAverage = 0.5; // (4 * 0 + 4 * 1) / 8
+    expect(summarizeFeedback(trendingEasier).emaDifficultyScore).toBeLessThan(flatAverage);
   });
 });
 
 describe('feedbackVolumeMultiplier', () => {
   it('stays neutral with fewer than 2 samples', () => {
-    expect(feedbackVolumeMultiplier({ avgDifficultyScore: 1, shoulderPainFlagged: false, sampleCount: 0 })).toBe(1);
-    expect(feedbackVolumeMultiplier({ avgDifficultyScore: 1, shoulderPainFlagged: false, sampleCount: 1 })).toBe(1);
+    expect(feedbackVolumeMultiplier({ emaDifficultyScore: 1, shoulderPainFlagged: false, sampleCount: 0 })).toBe(1);
+    expect(feedbackVolumeMultiplier({ emaDifficultyScore: 1, shoulderPainFlagged: false, sampleCount: 1 })).toBe(1);
   });
 
   it('backs off volume after a run of hard/too-hard sessions', () => {
-    expect(feedbackVolumeMultiplier({ avgDifficultyScore: 0.9, shoulderPainFlagged: false, sampleCount: 3 })).toBeLessThan(1);
+    expect(feedbackVolumeMultiplier({ emaDifficultyScore: 0.9, shoulderPainFlagged: false, sampleCount: 3 })).toBeLessThan(1);
   });
 
   it('nudges volume up after a run of easy sessions', () => {
-    expect(feedbackVolumeMultiplier({ avgDifficultyScore: 0.1, shoulderPainFlagged: false, sampleCount: 3 })).toBeGreaterThan(1);
+    expect(feedbackVolumeMultiplier({ emaDifficultyScore: 0.1, shoulderPainFlagged: false, sampleCount: 3 })).toBeGreaterThan(1);
   });
 
   it('stays neutral for a moderate average', () => {
-    expect(feedbackVolumeMultiplier({ avgDifficultyScore: 0.4, shoulderPainFlagged: false, sampleCount: 3 })).toBe(1);
+    expect(feedbackVolumeMultiplier({ emaDifficultyScore: 0.4, shoulderPainFlagged: false, sampleCount: 3 })).toBe(1);
   });
 });
 
 describe('avoidShoulderLoad', () => {
   it('mirrors the summary flag', () => {
-    expect(avoidShoulderLoad({ avgDifficultyScore: 0.5, shoulderPainFlagged: true, sampleCount: 2 })).toBe(true);
-    expect(avoidShoulderLoad({ avgDifficultyScore: 0.5, shoulderPainFlagged: false, sampleCount: 2 })).toBe(false);
+    expect(avoidShoulderLoad({ emaDifficultyScore: 0.5, shoulderPainFlagged: true, sampleCount: 2 })).toBe(true);
+    expect(avoidShoulderLoad({ emaDifficultyScore: 0.5, shoulderPainFlagged: false, sampleCount: 2 })).toBe(false);
+  });
+});
+
+describe('overloadedZones', () => {
+  it('flags a zone only once it has enough consistently-tough samples', () => {
+    const entries: SessionFeedback[] = [
+      { difficulty: 'tooHard', zone: 'sprint' },
+      { difficulty: 'hard', zone: 'sprint' },
+    ];
+    expect(overloadedZones(entries).has('sprint')).toBe(false); // only 2 samples, needs 3+
+    const withThird: SessionFeedback[] = [...entries, { difficulty: 'tooHard', zone: 'sprint' }];
+    expect(overloadedZones(withThird).has('sprint')).toBe(true);
+  });
+
+  it('does not flag a zone the athlete finds manageable', () => {
+    const entries: SessionFeedback[] = [
+      { difficulty: 'easy', zone: 'aerobicBase' },
+      { difficulty: 'moderate', zone: 'aerobicBase' },
+      { difficulty: 'easy', zone: 'aerobicBase' },
+    ];
+    expect(overloadedZones(entries).size).toBe(0);
+  });
+
+  it('ignores feedback entries with no recorded zone (e.g. gym sessions)', () => {
+    const entries: SessionFeedback[] = [{ difficulty: 'tooHard' }, { difficulty: 'tooHard' }, { difficulty: 'tooHard' }];
+    expect(overloadedZones(entries).size).toBe(0);
+  });
+
+  it('tracks each zone independently', () => {
+    const entries: SessionFeedback[] = [
+      { difficulty: 'tooHard', zone: 'sprint' },
+      { difficulty: 'tooHard', zone: 'sprint' },
+      { difficulty: 'tooHard', zone: 'sprint' },
+      { difficulty: 'easy', zone: 'technique' },
+      { difficulty: 'easy', zone: 'technique' },
+      { difficulty: 'easy', zone: 'technique' },
+    ];
+    const result = overloadedZones(entries);
+    expect(result.has('sprint')).toBe(true);
+    expect(result.has('technique')).toBe(false);
+  });
+});
+
+describe('easeOverloadedZones', () => {
+  it('swaps a hard zone the athlete has struggled with for an easier default', () => {
+    const overloaded = new Set<Zone>(['sprint']);
+    expect(easeOverloadedZones(['sprint', 'technique', 'sprint'], overloaded)).toEqual([
+      'aerobicBase',
+      'technique',
+      'aerobicBase',
+    ]);
+  });
+
+  it('leaves zones untouched when nothing is overloaded', () => {
+    expect(easeOverloadedZones(['sprint', 'technique'], new Set())).toEqual(['sprint', 'technique']);
+  });
+
+  it('leaves an already-easy zone alone even if flagged (no easier fallback defined)', () => {
+    const overloaded = new Set<Zone>(['recovery']);
+    expect(easeOverloadedZones(['recovery'], overloaded)).toEqual(['recovery']);
+  });
+});
+
+describe('adherenceRatio', () => {
+  const weekCounts: WeekCompletionCount[] = [
+    { weekKey: '2026-W10', count: 1 }, // current week, excluded
+    { weekKey: '2026-W09', count: 4 },
+    { weekKey: '2026-W08', count: 4 },
+    { weekKey: '2026-W07', count: 4 },
+  ];
+
+  it('is undefined with fewer than 3 weeks of prior history', () => {
+    expect(adherenceRatio(weekCounts.slice(0, 2), '2026-W10', 4)).toBeUndefined();
+  });
+
+  it('is undefined with no expected sessions', () => {
+    expect(adherenceRatio(weekCounts, '2026-W10', 0)).toBeUndefined();
+  });
+
+  it('returns 1 (full adherence) when completed counts match expectations', () => {
+    expect(adherenceRatio(weekCounts, '2026-W10', 4)).toBe(1);
+  });
+
+  it('returns a lower ratio when completed counts fall short of expectations', () => {
+    const lowHistory: WeekCompletionCount[] = [
+      { weekKey: '2026-W09', count: 1 },
+      { weekKey: '2026-W08', count: 2 },
+      { weekKey: '2026-W07', count: 1 },
+    ];
+    expect(adherenceRatio(lowHistory, '2026-W10', 4)).toBeCloseTo(1.33 / 4, 2);
+  });
+});
+
+describe('adherenceVolumeMultiplier', () => {
+  it('is neutral with no ratio or a healthy ratio', () => {
+    expect(adherenceVolumeMultiplier(undefined)).toBe(1);
+    expect(adherenceVolumeMultiplier(0.9)).toBe(1);
+  });
+
+  it('backs off volume when adherence has been consistently low', () => {
+    expect(adherenceVolumeMultiplier(0.3)).toBeLessThan(1);
   });
 });

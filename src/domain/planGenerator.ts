@@ -1,5 +1,16 @@
-import { avoidShoulderLoad, daysUntilRace, feedbackVolumeMultiplier, periodizationPhase, summarizeFeedback, volumeMultiplier } from './periodization';
-import { AthleteProfile, DayPlan, GymFocus, GymMode, PoolSession, SessionFeedback, TrainingGoal, WeekPlan, Zone } from './types';
+import {
+  adherenceRatio,
+  adherenceVolumeMultiplier,
+  avoidShoulderLoad,
+  daysUntilRace,
+  easeOverloadedZones,
+  feedbackVolumeMultiplier,
+  overloadedZones,
+  periodizationPhase,
+  summarizeFeedback,
+  volumeMultiplier,
+} from './periodization';
+import { AthleteProfile, DayPlan, GymFocus, GymMode, PoolSession, SessionFeedback, TrainingGoal, WeekCompletionCount, WeekPlan, Zone } from './types';
 import {
   basePace100Sec,
   buildCooldown,
@@ -125,20 +136,34 @@ export interface GenerateWeekPlanOptions {
   /** Overrides the current calendar week — mainly for tests. Defaults to today's ISO week. */
   weekKey?: string;
   /**
-   * A handful of the athlete's most recent post-session feedback entries (see
-   * src/domain/periodization.ts's summarizeFeedback) — used to back volume off after a run of
-   * hard/painful sessions, or nudge it up after a run of easy ones. Empty/absent = neutral.
+   * The athlete's full logged post-session feedback history, newest first (see
+   * src/domain/periodization.ts's summarizeFeedback/overloadedZones) — an exponential moving
+   * average backs volume off after a trend toward hard/painful sessions (or nudges it up after
+   * a trend toward easy ones), and per-zone tracking eases off specific zones the athlete has
+   * consistently found too hard. Empty/absent = neutral.
    */
-  recentFeedback?: SessionFeedback[];
+  feedbackHistory?: SessionFeedback[];
+  /**
+   * Completed-session counts per week (see src/state/history-context.tsx) — used only to gauge
+   * adherence to the current schedule (see src/domain/periodization.ts's adherenceRatio).
+   * Empty/absent = no adherence adjustment.
+   */
+  recentWeekCounts?: WeekCompletionCount[];
 }
 
 export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekPlanOptions = {}): WeekPlan {
   const weekKey = options.weekKey ?? isoWeekKey(new Date());
 
   const phase = periodizationPhase(daysUntilRace(weekKey, profile.goalRaceDate));
-  const feedbackSummary = summarizeFeedback(options.recentFeedback);
-  const volumeMult = Math.min(1.1, Math.max(0.5, volumeMultiplier(phase) * feedbackVolumeMultiplier(feedbackSummary)));
+  const feedbackSummary = summarizeFeedback(options.feedbackHistory);
+  const expectedSessionsPerWeek = profile.poolSessionsPerWeek + profile.gymSessionsPerWeek;
+  const adherence = adherenceRatio(options.recentWeekCounts ?? [], weekKey, expectedSessionsPerWeek);
+  const volumeMult = Math.min(
+    1.1,
+    Math.max(0.5, volumeMultiplier(phase) * feedbackVolumeMultiplier(feedbackSummary) * adherenceVolumeMultiplier(adherence)),
+  );
   const avoidShoulder = avoidShoulderLoad(feedbackSummary);
+  const overloaded = overloadedZones(options.feedbackHistory);
 
   const poolCount = clamp(profile.poolSessionsPerWeek, 0, 7);
   const poolDays = poolCount === 0 ? [] : (POOL_DAY_PATTERNS[poolCount] ?? POOL_DAY_PATTERNS[3]);
@@ -149,7 +174,7 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
 
   const zoneRotation = ZONE_ROTATION_BY_GOAL[profile.goal];
   const zoneOffset = weekKeyToOffset(weekKey, zoneRotation.length);
-  const zones = rotateArray(zoneRotation, zoneOffset).slice(0, poolDays.length);
+  const zones = easeOverloadedZones(rotateArray(zoneRotation, zoneOffset).slice(0, poolDays.length), overloaded);
   const strokeOffset = weekKeyToOffset(`${weekKey}:stroke`, 7);
 
   const days: DayPlan[] = Array.from({ length: 7 }, (_, dayIndex) => ({ dayIndex }));

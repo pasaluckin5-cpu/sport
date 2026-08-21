@@ -7,8 +7,11 @@ import {
   GymFocus,
   GymMode,
   PaceBenchmark,
+  PacingStrategy,
   PoolLength,
   RaceStroke,
+  RaceSplit,
+  RaceTacticKey,
   SetStep,
   StrokeKey,
   Zone,
@@ -410,6 +413,119 @@ const SWIM_DRYLAND_EXERCISES: Record<GymFocus, GymBlock[]> = {
     { exercise: 'hip9090Mobility', sets: 2, reps: '8', benefit: 'mobility' },
   ],
 };
+
+/**
+ * A pre-race warmup — deliberately different from a practice warmup (buildWarmup above): it's
+ * built to end with the body remembering exactly what race pace/effort feels like, not to build
+ * aerobic volume. Standard elite-level structure: easy loosening swim, a short technique-focused
+ * drill, a progressive build set, starts practice, then a couple of short reps at (or a touch
+ * faster than) goal race pace, finishing with an easy swim-down before resting up to the race.
+ * Reuses existing SetStepKind values (warmupSwim/drill/sprintBuild/sprintAllOut/recoverySwim)
+ * plus one new one (raceStartPractice) rather than inventing a parallel vocabulary.
+ */
+export function buildRaceWarmup(
+  raceDistance: number,
+  stroke: StrokeKey,
+  poolLength: PoolLength,
+  pace100Sec?: number,
+): SetStep[] {
+  const round = (m: number) => roundToPoolLength(m, poolLength);
+  const drillStroke = stroke === 'choice' ? 'freestyle' : stroke;
+  // Short races get short, punchy race-pace reps; longer races get double-length ones so the
+  // body rehearses turns/breathing pattern at something closer to actual race rhythm.
+  const fastRepDistance = raceDistance <= 100 ? round(poolLength) : round(poolLength * 2);
+
+  return [
+    {
+      kind: 'warmupSwim',
+      reps: 1,
+      repDistance: round(poolLength * 12),
+      distance: round(poolLength * 12),
+      stroke,
+      equipment: [],
+      zone: 'recovery',
+    },
+    repStep('drill', 4, round(poolLength), [], 'technique', { stroke: drillStroke }),
+    repStep('sprintBuild', 4, round(poolLength * 2), [], 'sprint', { stroke, restSec: 20 }),
+    repStep('raceStartPractice', 4, round(poolLength), [], 'sprint', { stroke, restSec: 45, restSecMax: 60 }),
+    repStep('sprintAllOut', 2, fastRepDistance, [], 'sprint', {
+      stroke,
+      restSec: 60,
+      restSecMax: 90,
+      // A touch faster than actual goal pace, so the last effort the body remembers before the
+      // race is at least as fast as what it's about to be asked for.
+      paceSec: pace100Sec !== undefined ? pace100Sec * 0.95 * (fastRepDistance / 100) : undefined,
+    }),
+    {
+      kind: 'recoverySwim',
+      reps: 1,
+      repDistance: round(poolLength * 4),
+      distance: round(poolLength * 4),
+      stroke,
+      equipment: [],
+      zone: 'recovery',
+    },
+  ];
+}
+
+/** Positive splitting (going out too fast) is a mistake, not a strategy — races 400+ get a negative-split recommendation; shorter races are raced at an even effort throughout. */
+export function raceDayPacingStrategy(raceDistance: number): PacingStrategy {
+  return raceDistance >= 400 ? 'negativeSplit' : 'evenSplit';
+}
+
+/** Half-race target splits from the athlete's benchmark pace. A negative split comes through the first half ~3% slower than even pace and closes ~3% faster, averaging out to the same overall target. */
+export function raceDaySplits(
+  raceDistance: number,
+  pace100Sec: number,
+  strategy: PacingStrategy,
+): { totalTargetSec: number; splits: RaceSplit[] } {
+  const totalTargetSec = pace100Sec * (raceDistance / 100);
+  const half = totalTargetSec / 2;
+  if (strategy === 'evenSplit') {
+    return {
+      totalTargetSec,
+      splits: [
+        { segment: 'firstHalf', targetSec: half },
+        { segment: 'secondHalf', targetSec: half },
+      ],
+    };
+  }
+  return {
+    totalTargetSec,
+    splits: [
+      { segment: 'firstHalf', targetSec: half * 1.03 },
+      { segment: 'secondHalf', targetSec: half * 0.97 },
+    ],
+  };
+}
+
+const STROKE_TACTIC: Partial<Record<RaceStroke, RaceTacticKey>> = {
+  freestyle: 'strokeFreestyleBilateral',
+  backstroke: 'strokeBackstrokeCounting',
+  breaststroke: 'strokeBreaststrokePullout',
+  butterfly: 'strokeButterflyRhythm',
+};
+
+/**
+ * Race tactics as typed keys (see src/i18n/format.ts for the translated text) rather than
+ * formatted sentences — same structured-output pattern as SetStepKind/GymExercise. 'im' has no
+ * stroke-specific entry (its tactics are mostly about transitions between strokes, out of scope
+ * for now).
+ */
+export function raceTacticalNotes(raceDistance: number, stroke: RaceStroke): RaceTacticKey[] {
+  const notes: RaceTacticKey[] = [];
+  if (raceDistance <= 100) {
+    notes.push('sprintStart', 'sprintNoBreathOff');
+  } else if (raceDistance >= 400) {
+    notes.push('distancePacing', 'distanceSighting');
+  } else {
+    notes.push('middleDistanceBuild');
+  }
+  notes.push('turnsBreakouts');
+  const strokeTactic = STROKE_TACTIC[stroke];
+  if (strokeTactic) notes.push(strokeTactic);
+  return notes;
+}
 
 export function buildGymSession(focus: GymFocus, durationMin: number, level: AthleteLevel, mode: GymMode): GymBlock[] {
   const catalog = mode === 'swimDryland' ? SWIM_DRYLAND_EXERCISES : GENERAL_FITNESS_EXERCISES;

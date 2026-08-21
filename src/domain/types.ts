@@ -48,7 +48,8 @@ export type SetStepKind =
   | 'vo2Kick'
   | 'sprintAllOut'
   | 'sprintBuild'
-  | 'recoverySwim';
+  | 'recoverySwim'
+  | 'raceStartPractice';
 
 export interface SetStep {
   kind: SetStepKind;
@@ -169,6 +170,14 @@ export type PainArea = 'shoulder' | 'knee' | 'back' | 'other';
 export interface SessionFeedback {
   difficulty: Difficulty;
   pain?: PainArea[];
+  /** Only set for pool sessions — lets the generator learn which zones the athlete finds hard. */
+  zone?: Zone;
+}
+
+/** Completed-session count for one ISO week — see src/state/history-context.tsx. */
+export interface WeekCompletionCount {
+  weekKey: string;
+  count: number;
 }
 
 /**
@@ -212,3 +221,41 @@ export interface WeekPlan {
 }
 
 export const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
+
+/**
+ * A short, typed coaching note for how to race a specific distance/stroke — not a formatted
+ * sentence, same "structured, presentation-agnostic" pattern as SetStepKind/GymExercise (see
+ * src/i18n/format.ts for the translated text). 'im' has no stroke-specific tactic (its tactics
+ * are mostly about transitions, out of scope for now) — only the four solo strokes get one.
+ */
+export type RaceTacticKey =
+  | 'sprintStart'
+  | 'sprintNoBreathOff'
+  | 'distancePacing'
+  | 'distanceSighting'
+  | 'middleDistanceBuild'
+  | 'turnsBreakouts'
+  | 'strokeBreaststrokePullout'
+  | 'strokeButterflyRhythm'
+  | 'strokeBackstrokeCounting'
+  | 'strokeFreestyleBilateral';
+
+/** Positive split (going out too fast) is a mistake pattern, not a strategy — never recommended. */
+export type PacingStrategy = 'evenSplit' | 'negativeSplit';
+
+export interface RaceSplit {
+  segment: 'firstHalf' | 'secondHalf';
+  targetSec: number;
+}
+
+/** A pre-race warmup/pacing/tactics plan for the athlete's goal race — see src/domain/raceDayPlan.ts. */
+export interface RaceDayPlan {
+  raceDistance: number;
+  stroke: RaceStroke;
+  warmup: SetStep[];
+  pacingStrategy: PacingStrategy;
+  /** Only set when the athlete has a pace benchmark — otherwise pacing is effort-based only. */
+  totalTargetSec?: number;
+  splits?: RaceSplit[];
+  tacticalNotes: RaceTacticKey[];
+}
