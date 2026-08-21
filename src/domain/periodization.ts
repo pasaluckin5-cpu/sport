@@ -1,4 +1,4 @@
-import { Difficulty, PeriodizationPhase, SessionFeedback, WeekCompletionCount, Zone } from './types';
+import { Difficulty, PeriodizationPhase, SessionFeedback, SessionKind, WeekCompletionCount, Zone } from './types';
 import { weekKeyToMonday } from './week';
 
 /**
@@ -163,4 +163,35 @@ export function adherenceRatio(
 export function adherenceVolumeMultiplier(ratio: number | undefined): number {
   if (ratio === undefined || ratio >= ADHERENCE_LOW_RATIO) return 1;
   return 0.85;
+}
+
+const FEEDBACK_HISTORY_LIMIT = 60;
+
+export interface FeedbackHistoryEntry {
+  weekKey: string;
+  dayIndex: number;
+  kind: SessionKind;
+  feedback: SessionFeedback;
+}
+
+/**
+ * Pulls the logged SessionFeedback entries out of a completion map (see
+ * src/storage/history-storage.ts's CompletionMap — typed structurally here as
+ * Record<string, true | SessionFeedback> rather than importing that type directly, since the
+ * domain layer stays independent of the storage layer), newest first. Shared by
+ * HistoryProvider (for its own feedbackHistory selector) and the coach dashboard (reading a
+ * fetched athlete's cloud completions), so both get the same recency ordering and cap.
+ */
+export function extractFeedbackHistory(
+  completions: Record<string, true | SessionFeedback>,
+  limit = FEEDBACK_HISTORY_LIMIT,
+): FeedbackHistoryEntry[] {
+  return Object.entries(completions)
+    .filter((entry): entry is [string, SessionFeedback] => typeof entry[1] === 'object')
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .slice(0, limit)
+    .map(([key, feedback]) => {
+      const [weekKey, dayIndexStr, kind] = key.split(':');
+      return { weekKey, dayIndex: Number(dayIndexStr), kind: kind as SessionKind, feedback };
+    });
 }

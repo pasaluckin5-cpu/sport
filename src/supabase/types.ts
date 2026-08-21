@@ -1,4 +1,4 @@
-import { GymBlock, GymFocus, SetStep, Zone } from '@/domain/types';
+import { GymBlock, GymFocus, SessionFeedback, SetStep, Zone } from '@/domain/types';
 
 /**
  * Hand-written row types mirroring supabase/migrations/0001_init.sql — there's no live project
@@ -34,6 +34,7 @@ export interface AthleteProfileRow {
   benchmark_time_sec: number | null;
   primary_strokes: string[] | null;
   primary_distances: number[] | null;
+  goal_race_date: string | null;
   updated_at: string;
 }
 
@@ -44,6 +45,7 @@ export interface CompletionRow {
   day_index: number;
   kind: 'pool' | 'gym';
   completed_at: string;
+  feedback: SessionFeedback | null;
 }
 
 export interface StrokeLogRow {

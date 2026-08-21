@@ -180,6 +180,9 @@ export interface WeekCompletionCount {
   count: number;
 }
 
+/** A day can have an independent pool session and/or gym session — see src/state/history-context.tsx. */
+export type SessionKind = 'pool' | 'gym';
+
 /**
  * Standard athletic periodization phases, derived purely from days-until-race (see
  * src/domain/periodization.ts) — base (general prep) -> build (increasing load) -> peak

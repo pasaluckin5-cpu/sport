@@ -1,4 +1,4 @@
-import { AthleteProfile, StrokeCountEntry } from '@/domain/types';
+import { AthleteProfile, SessionFeedback, StrokeCountEntry } from '@/domain/types';
 import { CompletionMap } from '@/storage/history-storage';
 
 import { supabase } from './config';
@@ -26,6 +26,7 @@ function profileToRow(userId: string, p: AthleteProfile) {
     benchmark_time_sec: p.benchmark?.timeSec ?? null,
     primary_strokes: p.primaryStrokes ?? null,
     primary_distances: p.primaryDistances ?? null,
+    goal_race_date: p.goalRaceDate ?? null,
     updated_at: new Date().toISOString(),
   };
 }
@@ -46,6 +47,7 @@ function rowToProfile(row: AthleteProfileRow): AthleteProfile {
         : undefined,
     primaryStrokes: (row.primary_strokes as AthleteProfile['primaryStrokes']) ?? undefined,
     primaryDistances: row.primary_distances ?? undefined,
+    goalRaceDate: row.goal_race_date ?? undefined,
   };
 }
 
@@ -63,11 +65,14 @@ export async function upsertCloudProfile(userId: string, profile: AthleteProfile
 
 export async function fetchCloudCompletions(userId: string): Promise<CompletionMap> {
   if (!supabase) return {};
-  const { data, error } = await supabase.from('completions').select('week_key, day_index, kind').eq('user_id', userId);
+  const { data, error } = await supabase
+    .from('completions')
+    .select('week_key, day_index, kind, feedback')
+    .eq('user_id', userId);
   if (error || !data) return {};
   const map: CompletionMap = {};
-  for (const row of data as { week_key: string; day_index: number; kind: string }[]) {
-    map[`${row.week_key}:${row.day_index}:${row.kind}`] = true;
+  for (const row of data as { week_key: string; day_index: number; kind: string; feedback: SessionFeedback | null }[]) {
+    map[`${row.week_key}:${row.day_index}:${row.kind}`] = row.feedback ?? true;
   }
   return map;
 }
@@ -78,12 +83,15 @@ export async function setCloudCompletion(
   dayIndex: number,
   kind: 'pool' | 'gym',
   completed: boolean,
+  feedback?: SessionFeedback,
 ): Promise<void> {
   if (!supabase) return;
   if (completed) {
-    await supabase
-      .from('completions')
-      .upsert({ user_id: userId, week_key: weekKey, day_index: dayIndex, kind }, { onConflict: 'user_id,week_key,day_index,kind' });
+    // Omitting `feedback` entirely (rather than passing null) when the caller has none to set
+    // means a plain "mark done" toggle never clobbers feedback already logged for this session.
+    const row: Record<string, unknown> = { user_id: userId, week_key: weekKey, day_index: dayIndex, kind };
+    if (feedback !== undefined) row.feedback = feedback;
+    await supabase.from('completions').upsert(row, { onConflict: 'user_id,week_key,day_index,kind' });
   } else {
     await supabase.from('completions').delete().match({ user_id: userId, week_key: weekKey, day_index: dayIndex, kind });
   }
@@ -93,10 +101,25 @@ export async function bulkUploadCompletions(userId: string, map: CompletionMap):
   if (!supabase) return;
   const rows = Object.keys(map).map((key) => {
     const [weekKey, dayIndexStr, kind] = key.split(':');
-    return { user_id: userId, week_key: weekKey, day_index: Number(dayIndexStr), kind };
+    const value = map[key];
+    const feedback = typeof value === 'object' ? value : null;
+    return { user_id: userId, week_key: weekKey, day_index: Number(dayIndexStr), kind, feedback };
   });
   if (rows.length === 0) return;
   await supabase.from('completions').upsert(rows, { onConflict: 'user_id,week_key,day_index,kind' });
+}
+
+/**
+ * Lets a linked coach set (or clear, with raceDate: null) an athlete's goal race date — the one
+ * training-profile field a coach can write, via the narrow set_athlete_goal_race_date() RPC
+ * (supabase/migrations/0003_coach_race_planning.sql) rather than a broad write grant on
+ * athlete_profiles. The athlete's own app picks this up the next time it re-fetches their cloud
+ * profile (sign-in, or their own next edit+save).
+ */
+export async function setAthleteGoalRaceDate(athleteId: string, raceDate: string | null): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Not configured' };
+  const { error } = await supabase.rpc('set_athlete_goal_race_date', { target_athlete: athleteId, race_date: raceDate });
+  return { error: error ? error.message : null };
 }
 
 export async function fetchCloudStrokeLog(userId: string): Promise<StrokeCountEntry[]> {

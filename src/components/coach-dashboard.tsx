@@ -3,16 +3,22 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ChipGroup } from '@/components/chip-group';
+import { RaceDayPlanView } from '@/components/race-day-plan-view';
 import { Stepper } from '@/components/stepper';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Collapsible } from '@/components/ui/collapsible';
 import { Spacing } from '@/constants/theme';
-import { GymExercise, GymFocus, RaceStroke, SetStepKind, Zone } from '@/domain/types';
+import { daysUntilRace, extractFeedbackHistory, FeedbackHistoryEntry, periodizationPhase } from '@/domain/periodization';
+import { buildRaceDayPlan } from '@/domain/raceDayPlan';
+import { AthleteProfile, GymExercise, GymFocus, RaceStroke, SetStepKind, Zone } from '@/domain/types';
+import { isoWeekKey } from '@/domain/week';
+import { periodizationNoteText } from '@/i18n/format';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/state/auth-context';
 import { sendMessage, sendTeamMessage, fetchThread, fetchTeamChat } from '@/supabase/chat';
 import { addResult } from '@/supabase/results';
+import { fetchCloudCompletions, fetchCloudProfile, setAthleteGoalRaceDate } from '@/supabase/sync';
 import {
   createTeam,
   fetchMyTeam,
@@ -360,6 +366,160 @@ function ResultsLogger({ coachId, athletes }: { coachId: string; athletes: TeamM
   );
 }
 
+/**
+ * Extends "the coach writes the athlete's training" beyond one-off workouts (WorkoutComposer
+ * above) to periodization and post-session feedback: a coach can set (or clear) a linked
+ * athlete's goal race date — the same field that drives that athlete's own periodization phase
+ * and race day plan (src/domain/periodization.ts, src/domain/raceDayPlan.ts) — see how recent
+ * sessions actually felt, and preview the athlete's own race day plan once it's close. Reads via
+ * fetchCloudProfile/fetchCloudCompletions (already scoped by RLS to a linked coach); the write
+ * goes through the narrow set_athlete_goal_race_date() RPC (supabase/migrations/
+ * 0003_coach_race_planning.sql) rather than a broad write grant on athlete_profiles.
+ */
+function AthleteInsightsPanel({ athletes }: { athletes: TeamMemberWithEmail[] }) {
+  const { t } = useTranslation();
+  const [athleteEmail, setAthleteEmail] = useState(athletes[0]?.email ?? '');
+  const [profile, setProfile] = useState<AthleteProfile | null>(null);
+  const [feedbackEntries, setFeedbackEntries] = useState<FeedbackHistoryEntry[]>([]);
+  const [raceInDays, setRaceInDays] = useState(60);
+  const [message, setMessage] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  const athlete = athletes.find((m) => m.email === athleteEmail);
+
+  async function refresh(athleteId: string) {
+    const [fetchedProfile, completions] = await Promise.all([
+      fetchCloudProfile(athleteId),
+      fetchCloudCompletions(athleteId),
+    ]);
+    setProfile(fetchedProfile);
+    setFeedbackEntries(extractFeedbackHistory(completions, 6));
+    setLoaded(true);
+  }
+
+  useEffect(() => {
+    if (!athlete) return;
+    let cancelled = false;
+    // Same reasoning as CoachDashboard's own top-level effect below: refresh() sets state as
+    // each fetch resolves — the compiler's static check can't see into it to confirm that's
+    // safely gated, but React 19 (this app's target) makes a state update after unmount a
+    // harmless no-op, so the risk this rule guards against doesn't apply here; `cancelled` is
+    // kept anyway as a not-strictly-necessary guard against a stale response landing after the
+    // athlete selection has moved on.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refresh(athlete.athlete_id).then(() => {
+      if (cancelled) return;
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athlete?.athlete_id]);
+
+  if (!athlete) return null;
+
+  const weekKey = isoWeekKey(new Date());
+  const days = profile ? daysUntilRace(weekKey, profile.goalRaceDate) : undefined;
+  const phase = periodizationPhase(days);
+  const racePlan = profile ? buildRaceDayPlan(profile) : undefined;
+
+  async function handleSetRaceDate() {
+    const date = new Date();
+    date.setDate(date.getDate() + raceInDays);
+    const { error } = await setAthleteGoalRaceDate(athlete!.athlete_id, date.toISOString().slice(0, 10));
+    setMessage(error ?? t('coach.insights.raceDateSet'));
+    if (!error) refresh(athlete!.athlete_id);
+  }
+
+  async function handleClearRaceDate() {
+    const { error } = await setAthleteGoalRaceDate(athlete!.athlete_id, null);
+    setMessage(error ?? t('coach.insights.raceDateCleared'));
+    if (!error) refresh(athlete!.athlete_id);
+  }
+
+  return (
+    <View style={styles.block}>
+      <ThemedText type="smallBold" themeColor="textSecondary">
+        {t('coach.insights.title')}
+      </ThemedText>
+      <ChipGroup options={athletes.map((a) => ({ value: a.email, label: a.email }))} selected={[athleteEmail]} onToggle={setAthleteEmail} />
+
+      {!loaded ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          {t('common.loading')}
+        </ThemedText>
+      ) : !profile ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          {t('coach.insights.noProfile')}
+        </ThemedText>
+      ) : (
+        <>
+          <View style={styles.nested}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('coach.insights.goalRaceLabel')}
+            </ThemedText>
+            <ThemedText type="small">
+              {profile.goalRaceDate
+                ? t('coach.insights.currentRaceDate', { date: profile.goalRaceDate })
+                : t('coach.insights.noRaceDate')}
+            </ThemedText>
+            {phase && days !== undefined && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {periodizationNoteText(phase, days, t)}
+              </ThemedText>
+            )}
+            <Stepper value={raceInDays} min={1} max={365} suffix={t('coach.insights.days')} onChange={setRaceInDays} />
+            <Pressable onPress={handleSetRaceDate} style={({ pressed }) => pressed && styles.pressed}>
+              <ThemedView type="backgroundElement" style={styles.button}>
+                <ThemedText type="smallBold">{t('coach.insights.setRaceDate')}</ThemedText>
+              </ThemedView>
+            </Pressable>
+            {profile.goalRaceDate && (
+              <Pressable onPress={handleClearRaceDate} style={({ pressed }) => pressed && styles.pressed}>
+                <ThemedText type="link">{t('common.clear')}</ThemedText>
+              </Pressable>
+            )}
+            {message && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {message}
+              </ThemedText>
+            )}
+          </View>
+
+          <View style={styles.nested}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('coach.insights.feedbackTitle')}
+            </ThemedText>
+            {feedbackEntries.length === 0 ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('coach.insights.feedbackEmpty')}
+              </ThemedText>
+            ) : (
+              feedbackEntries.map((entry, i) => (
+                <ThemedText key={i} type="small">
+                  {entry.weekKey} · {t(`feedback.difficulty.${entry.feedback.difficulty}`)}
+                  {entry.feedback.pain && entry.feedback.pain.length > 0
+                    ? ` · ${entry.feedback.pain.map((p) => t(`feedback.pain.${p}`)).join(', ')}`
+                    : ''}
+                </ThemedText>
+              ))
+            )}
+          </View>
+
+          {racePlan && (phase === 'peak' || phase === 'taper') && (
+            <View style={styles.nested}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('raceDay.title')}
+              </ThemedText>
+              <RaceDayPlanView plan={racePlan} unit={profile.unit} />
+            </View>
+          )}
+        </>
+      )}
+    </View>
+  );
+}
+
 function CoachChat({ coachId, team, athletes }: { coachId: string; team: TeamRow; athletes: TeamMemberWithEmail[] }) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -503,6 +663,7 @@ export function CoachDashboard() {
       {team && activeAthletes.length > 0 && (
         <>
           <WorkoutComposer coachId={session.user.id} athletes={activeAthletes} />
+          <AthleteInsightsPanel athletes={activeAthletes} />
           <ResultsLogger coachId={session.user.id} athletes={activeAthletes} />
           <CoachChat coachId={session.user.id} team={team} athletes={activeAthletes} />
         </>

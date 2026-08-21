@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { SessionFeedback, WeekCompletionCount } from '@/domain/types';
+import { extractFeedbackHistory } from '@/domain/periodization';
+import { SessionFeedback, SessionKind, WeekCompletionCount } from '@/domain/types';
 import { CompletionMap, loadHistory, saveHistory } from '@/storage/history-storage';
 import { bulkUploadCompletions, fetchCloudCompletions, setCloudCompletion } from '@/supabase/sync';
 
 import { useAuth } from './auth-context';
 
-export type SessionKind = 'pool' | 'gym';
+export type { SessionKind };
 
 interface HistoryContextValue {
   isReady: boolean;
@@ -22,8 +23,6 @@ interface HistoryContextValue {
   feedbackHistory: SessionFeedback[];
   weekCounts: WeekCompletionCount[];
 }
-
-const FEEDBACK_HISTORY_LIMIT = 60;
 
 function completionKey(weekKey: string, dayIndex: number, kind: SessionKind): string {
   return `${weekKey}:${dayIndex}:${kind}`;
@@ -51,10 +50,10 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
 
   // Same pattern as PlanProvider: cloud wins if it already has rows (returning user, new
   // device); otherwise the local history — if any — is uploaded once. See plan-context.tsx for
-  // the fuller rationale; kept identical here so both stay easy to compare. Difference: cloud
-  // completion rows are booleans only (no feedback column yet — see setFeedback's own note), so
-  // any locally-logged feedback objects are layered back on top of the cloud map rather than
-  // being discarded, to avoid losing detail a signed-in athlete already recorded on this device.
+  // the fuller rationale; kept identical here so both stay easy to compare. Cloud completion
+  // rows carry feedback too (see setFeedback below), but any locally-logged feedback objects are
+  // still layered back on top of the cloud map as a safety net, in case a local entry hasn't
+  // made it to the cloud yet, rather than risking a richer local value being discarded.
   useEffect(() => {
     if (!session || !isReady) return;
     let cancelled = false;
@@ -87,11 +86,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       .map(([weekKey, count]) => ({ weekKey, count }))
       .sort((a, b) => (a.weekKey < b.weekKey ? 1 : -1));
 
-    const feedbackHistory = Object.entries(history)
-      .filter((entry): entry is [string, SessionFeedback] => typeof entry[1] === 'object')
-      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-      .slice(0, FEEDBACK_HISTORY_LIMIT)
-      .map(([, feedback]) => feedback);
+    const feedbackHistory = extractFeedbackHistory(history).map((e) => e.feedback);
 
     return {
       isReady,
@@ -117,9 +112,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
         const next = { ...history, [key]: feedback };
         setHistory(next);
         saveHistory(next);
-        // Cloud only tracks completion as a boolean today (no feedback column) — still record
-        // the completion itself so the cloud row stays in sync with "this session is done".
-        if (session) setCloudCompletion(session.user.id, weekKey, dayIndex, kind, true);
+        if (session) setCloudCompletion(session.user.id, weekKey, dayIndex, kind, true, feedback);
       },
     };
   }, [history, isReady, session]);

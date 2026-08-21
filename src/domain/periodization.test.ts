@@ -6,6 +6,7 @@ import {
   avoidShoulderLoad,
   daysUntilRace,
   easeOverloadedZones,
+  extractFeedbackHistory,
   feedbackVolumeMultiplier,
   overloadedZones,
   periodizationPhase,
@@ -256,5 +257,35 @@ describe('adherenceVolumeMultiplier', () => {
 
   it('backs off volume when adherence has been consistently low', () => {
     expect(adherenceVolumeMultiplier(0.3)).toBeLessThan(1);
+  });
+});
+
+describe('extractFeedbackHistory', () => {
+  it('ignores plain-true completions (no feedback logged)', () => {
+    const map = { '2026-W10:0:pool': true as const, '2026-W10:1:gym': true as const };
+    expect(extractFeedbackHistory(map)).toEqual([]);
+  });
+
+  it('parses the weekKey/dayIndex/kind out of the map key', () => {
+    const map = { '2026-W10:2:pool': { difficulty: 'hard' as const, zone: 'sprint' as const } };
+    expect(extractFeedbackHistory(map)).toEqual([
+      { weekKey: '2026-W10', dayIndex: 2, kind: 'pool', feedback: { difficulty: 'hard', zone: 'sprint' } },
+    ]);
+  });
+
+  it('sorts newest first by key', () => {
+    const map = {
+      '2026-W08:0:pool': { difficulty: 'easy' as const },
+      '2026-W10:0:pool': { difficulty: 'hard' as const },
+      '2026-W09:0:pool': { difficulty: 'moderate' as const },
+    };
+    expect(extractFeedbackHistory(map).map((e) => e.weekKey)).toEqual(['2026-W10', '2026-W09', '2026-W08']);
+  });
+
+  it('respects a custom limit', () => {
+    const map = Object.fromEntries(
+      Array.from({ length: 10 }, (_, i) => [`2026-W${10 + i}:0:pool`, { difficulty: 'easy' as const }]),
+    );
+    expect(extractFeedbackHistory(map, 3)).toHaveLength(3);
   });
 });

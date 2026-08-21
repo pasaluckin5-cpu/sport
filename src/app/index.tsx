@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AthleteCoachPanel } from '@/components/athlete-coach-panel';
 import { ChipGroup } from '@/components/chip-group';
 import { FriendsPanel } from '@/components/friends-panel';
+import { RaceDayPlanView } from '@/components/race-day-plan-view';
 import { Stepper } from '@/components/stepper';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -25,8 +26,6 @@ import {
   formatSetStep,
   gymModeLabel,
   periodizationNoteText,
-  raceDayPacingText,
-  raceTacticText,
   recordsProgressText,
   swimSessionTitle,
   unitAbbrev,
@@ -202,32 +201,7 @@ function RaceDaySection({ profile }: { profile: AthleteProfile }) {
 
   return (
     <Collapsible title={t('raceDay.title')}>
-      <View style={styles.sessionBlock}>
-        <ThemedText type="smallBold" themeColor="textSecondary">
-          {t('raceDay.warmupTitle')}
-        </ThemedText>
-        {plan.warmup.map((step, i) => (
-          <ThemedText key={i} type="small">
-            • {formatSetStep(step, t, profile.unit)}
-          </ThemedText>
-        ))}
-      </View>
-      <View style={styles.sessionBlock}>
-        <ThemedText type="smallBold" themeColor="textSecondary">
-          {t('raceDay.pacingTitle')}
-        </ThemedText>
-        <ThemedText type="small">{raceDayPacingText(plan, profile.unit, t)}</ThemedText>
-      </View>
-      <View style={styles.sessionBlock}>
-        <ThemedText type="smallBold" themeColor="textSecondary">
-          {t('raceDay.tacticsTitle')}
-        </ThemedText>
-        {plan.tacticalNotes.map((key) => (
-          <ThemedText key={key} type="small">
-            • {raceTacticText(key, t)}
-          </ThemedText>
-        ))}
-      </View>
+      <RaceDayPlanView plan={plan} unit={profile.unit} />
     </Collapsible>
   );
 }

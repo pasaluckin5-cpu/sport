@@ -370,6 +370,18 @@ its SQL editor. Nothing here is wired to a real project by default: `src/supabas
   (`coach-dashboard.tsx`) is intentionally simpler than the generator itself — one warm-up step,
   one main-set step, one cool-down step per workout — documented in-app (`coach.workout.
   scopeNote`) rather than silently limiting without explanation.
+- **A coach can also set the athlete's periodization target and see their feedback**
+  (`AthleteInsightsPanel` in `coach-dashboard.tsx`): a linked coach can set or clear an athlete's
+  `goalRaceDate` — the same field that drives that athlete's own periodization phase and race day
+  plan — via the narrow `set_athlete_goal_race_date` RPC (`supabase/migrations/
+  0003_coach_race_planning.sql`), not a broad write grant on `athlete_profiles`; the athlete's own
+  training-profile edit rights are otherwise untouched. The panel also shows the athlete's recent
+  logged `SessionFeedback` (now synced via a `completions.feedback` jsonb column, same
+  migration) and, once the race is close, a preview of the athlete's own race day plan via the
+  shared `RaceDayPlanView` component (`src/components/race-day-plan-view.tsx`, factored out of
+  `index.tsx`'s `RaceDaySection` so both render identically). See
+  `docs/supabase-architecture.md`'s "Coach race planning + feedback" section for the schema/RLS
+  detail.
 - **What a coach can/can't see, concretely**: linked-coach read access is scoped to profile
   settings, completion history, stroke log, and results — never another coach's athletes, and
   never an athlete not on one of the coach's teams (checked live via `is_linked_coach_of`/

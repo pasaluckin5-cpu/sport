@@ -512,6 +512,41 @@ together, so this purely widens read access, it can't accidentally narrow anythi
   stroke instead of always assuming freestyle, and skipping the rank/goal line for any
   non-freestyle stroke (ЕВСК data stays freestyle-only, see `standards.ts`).
 
+## Coach race planning + feedback (supabase/migrations/0003_coach_race_planning.sql)
+
+A third additive migration, extending "the coach writes the athlete's training" (workouts,
+above) to cover periodization and post-session feedback too — the two adaptation loops
+`src/domain/periodization.ts` added on the athlete's own side.
+
+- **`athlete_profiles.goal_race_date` (date, nullable)**: the same field
+  `AthleteProfile.goalRaceDate` already reads/writes locally, now synced (`profileToRow`/
+  `rowToProfile` in `src/supabase/sync.ts`) so a linked coach can read it via the existing
+  `athlete_profiles_select` policy from 0001 — no RLS change needed for reads.
+- **Coach writes go through `set_athlete_goal_race_date(target_athlete, race_date)`**, not a
+  broadened `athlete_profiles_write` policy: the existing policy stays `user_id = auth.uid() or
+  is_admin()` (an athlete's own profile is still theirs to edit), and this RPC is the *one*
+  narrow, security-definer exception — same pattern as `invite_athlete_by_email()` — checking
+  `is_linked_coach_of(target_athlete)` before updating *only* `goal_race_date`, nothing else in
+  the athlete's training profile. `race_date: null` clears it. The athlete's own app picks up the
+  change the next time it re-fetches its cloud profile (sign-in, or its own next edit+save) —
+  there's no push/realtime notification for this yet (see "Still open" below, same caveat as
+  chat).
+- **`completions.feedback` (jsonb, nullable)**: mirrors `SessionFeedback` (difficulty + optional
+  pain areas + zone). No RLS change needed here either: `completions_write` already lets an
+  athlete write any column on their own rows, and `completions_select` already grants a linked
+  coach read access to the whole row. `fetchCloudCompletions`/`setCloudCompletion`/
+  `bulkUploadCompletions` (`src/supabase/sync.ts`) were extended to carry it — a plain "mark
+  done" toggle omits the `feedback` key entirely from its upsert payload (rather than sending
+  `null`) so it never clobbers feedback already logged for that session.
+- **UI**: `src/components/coach-dashboard.tsx`'s `AthleteInsightsPanel` — per linked athlete, set
+  or clear their goal race date (a Stepper for "race in N days", reusing the pattern
+  `WorkoutComposer`'s own date-from-today Stepper already established), see their current
+  periodization phase/days-to-race (`periodizationNoteText`, the same helper the athlete's own
+  Plan screen uses), the last few feedback entries (difficulty + pain, by week), and — once the
+  race is close (`peak`/`taper` phase) — a preview of the athlete's own race day plan
+  (`src/components/race-day-plan-view.tsx`, factored out of `src/app/index.tsx`'s own
+  `RaceDaySection` so both render identically rather than duplicating that JSX).
+
 ## Still open / out of scope for this pass
 
 1. **Team chat pagination/real-time**: `team_messages`/`messages`/`friendships`-adjacent data are
