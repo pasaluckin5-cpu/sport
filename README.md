@@ -40,6 +40,13 @@ a gender and a freestyle time trial, compares your time against current world re
 Russian ЕВСК classification standards, with a concrete next-rank goal to chase. The UI is
 available in English and Russian, switchable in the Profile tab.
 
+**Can't swim at all yet?** The separate "Learn" tab is a self-paced learn-to-swim program —
+water comfort, floating, gliding, kicking, arm stroke, breathing, then putting it all together —
+independent of the main training profile. Pick how many minutes you can practice per day: the
+program has a fixed amount of content, so more time per day finishes it in fewer days rather
+than cramming in more material, down to a two-week floor (skills need repeated days to actually
+stick, not just total minutes). Progress is a simple day-by-day checklist, stored on-device only.
+
 The app is local-first: your profile is saved on-device and the week's plan is generated from
 it, no account or server required. You can always copy your profile as text (Profile → Backup &
 restore) and paste it back in on a new device.

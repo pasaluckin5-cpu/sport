@@ -8,6 +8,8 @@ import {
   Gender,
   GymBlock,
   GymMode,
+  LearnToSwimDrill,
+  LearnToSwimStage,
   PaceBenchmark,
   PeriodizationPhase,
   RaceDayPlan,
@@ -204,6 +206,14 @@ export function raceDayPacingText(plan: RaceDayPlan, unit: DistanceUnit, t: TFun
 
 export function raceTacticText(key: RaceDayPlan['tacticalNotes'][number], t: TFunction): string {
   return t(`raceDay.tactic.${key}`);
+}
+
+export function learnToSwimStageLabel(stage: LearnToSwimStage, t: TFunction): string {
+  return t(`learnToSwim.stage.${stage}.label`);
+}
+
+export function formatLearnToSwimDrill(drill: LearnToSwimDrill, t: TFunction): string {
+  return `${drill.minutes}${t('common.min')} · ${t(`learnToSwim.drill.${drill.kind}`)}`;
 }
 
 /** Plain-text rendering of a day's session(s), for sharing with a coach or training partner. */

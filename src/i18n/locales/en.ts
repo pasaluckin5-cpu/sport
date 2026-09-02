@@ -9,6 +9,7 @@ export default {
   },
   tabs: {
     plan: 'Plan',
+    learn: 'Learn',
     profile: 'Profile',
   },
   plan: {
@@ -90,6 +91,65 @@ export default {
       strokeButterflyRhythm: "Find your rhythm early and protect it — don't let the arms rush ahead of the kick, that's what causes butterfly to fall apart late in a race.",
       strokeBackstrokeCounting: 'Count strokes to the wall on your final approach in every race-pace rep this week, so you don\'t have to look for the wall or crash into it on race day.',
       strokeFreestyleBilateral: 'Keep bilateral breathing awareness even under race stress — a good, symmetric stroke holds up better as fatigue sets in than a one-sided one.',
+    },
+  },
+  learnToSwim: {
+    onboarding: {
+      title: 'Learn to swim',
+      subtitle:
+        "A step-by-step program from zero — water comfort, floating, kicking, arm stroke, breathing, and putting it all together. Pick how much time you can practice each day; more time per day means finishing sooner, not more content packed in.",
+      minutesLabel: 'Minutes per day',
+      minutesOption: '{{count}} min',
+      preview_one: "At this pace, you'll finish in about {{count}} day.",
+      preview_other: "At this pace, you'll finish in about {{count}} days.",
+      start: 'Start the program',
+    },
+    active: {
+      dayCounter: 'Day {{day}} of {{total}}',
+      progress: '{{percent}}% complete',
+      markDone: "Mark today's lesson done",
+    },
+    finished: {
+      title: "You've completed the program!",
+      subtitle:
+        'Keep practicing what you learned — and once you can swim comfortably, set up a real training profile on the Plan tab to keep building from here.',
+    },
+    settings: {
+      title: 'Change pace',
+      hint: 'Changing your daily time recalculates how many days are left — your progress carries over.',
+      apply: 'Apply',
+      reset: 'Start over',
+      resetConfirm: 'This clears your progress and lets you restart the program from day 1.',
+    },
+    safetyDisclaimer:
+      'Practice with a lifeguard present or a supervising adult who can swim nearby — never alone, and never in open water while still learning. This is instructional content, not supervised lessons or a substitute for them.',
+    stage: {
+      waterComfort: { label: 'Water comfort' },
+      floating: { label: 'Floating' },
+      gliding: { label: 'Gliding' },
+      kicking: { label: 'Kicking' },
+      armStroke: { label: 'Arm stroke' },
+      breathingCoordination: { label: 'Breathing coordination' },
+      fullStrokeEndurance: { label: 'Full stroke & endurance' },
+    },
+    drill: {
+      breathControl: 'Breath control: blow bubbles through your nose/mouth at the wall, rhythmically',
+      faceSubmersion: 'Submerge your face and open your eyes underwater, holding briefly each time',
+      frontFloat: 'Front float: push off gently and let your body float face-down, arms extended',
+      backFloat: 'Back float: relax your head back and float on your back, chest up',
+      recoveryToStanding: 'Recovery to standing: from a float, tuck your knees and rotate back to your feet',
+      wallPushGlide: 'Push off the wall and glide as far as you can before your feet drop',
+      streamlineGlide: 'Streamline glide: arms extended overhead, ears squeezed between arms, push and glide',
+      flutterKickFront: 'Flutter kick on your front, holding the wall or a kickboard',
+      flutterKickBack: 'Flutter kick on your back, arms at your sides',
+      armCircleStanding: 'Standing on the pool floor, rehearse the freestyle arm-circle motion out of the water',
+      armStrokeWithGlide: 'Combine the arm stroke with a glide, one or two strokes at a time',
+      sideBreathing: 'Side breathing rhythm: turn your head to the side to inhale, exhale underwater',
+      breathingWithKick: 'Combine side breathing with a steady flutter kick',
+      fullStrokeShort: 'Short full-stroke reps: kick, arms, and breathing together for a few strokes',
+      fullStrokeContinuous: "Longer continuous swimming, combining everything you've practiced",
+      treadingWater: 'Tread water in place using a gentle kick and sculling arm motion',
+      rollToBackFloat: 'Mid-swim, roll onto your back to float and rest, then continue',
     },
   },
   progress: {

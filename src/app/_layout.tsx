@@ -8,6 +8,7 @@ import '@/i18n';
 import { AuthProvider } from '@/state/auth-context';
 import { HistoryProvider } from '@/state/history-context';
 import { LanguageProvider } from '@/state/language-context';
+import { LearnToSwimProvider } from '@/state/learnToSwim-context';
 import { PlanProvider } from '@/state/plan-context';
 import { StrokeLogProvider } from '@/state/strokeLog-context';
 
@@ -22,8 +23,10 @@ export default function TabLayout() {
           <HistoryProvider>
             <PlanProvider>
               <StrokeLogProvider>
-                <AnimatedSplashOverlay />
-                <AppTabs />
+                <LearnToSwimProvider>
+                  <AnimatedSplashOverlay />
+                  <AppTabs />
+                </LearnToSwimProvider>
               </StrokeLogProvider>
             </PlanProvider>
           </HistoryProvider>

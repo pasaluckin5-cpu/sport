@@ -226,6 +226,57 @@ export interface WeekPlan {
 export const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
 
 /**
+ * The "learn to swim from zero" curriculum's stages, in order — a completely different track
+ * from the main training plan (that one assumes the athlete can already swim). See
+ * src/domain/learnToSwim.ts.
+ */
+export type LearnToSwimStage =
+  | 'waterComfort'
+  | 'floating'
+  | 'gliding'
+  | 'kicking'
+  | 'armStroke'
+  | 'breathingCoordination'
+  | 'fullStrokeEndurance';
+
+export type LearnToSwimDrillKind =
+  | 'breathControl'
+  | 'faceSubmersion'
+  | 'frontFloat'
+  | 'backFloat'
+  | 'recoveryToStanding'
+  | 'wallPushGlide'
+  | 'streamlineGlide'
+  | 'flutterKickFront'
+  | 'flutterKickBack'
+  | 'armCircleStanding'
+  | 'armStrokeWithGlide'
+  | 'sideBreathing'
+  | 'breathingWithKick'
+  | 'fullStrokeShort'
+  | 'fullStrokeContinuous'
+  | 'treadingWater'
+  | 'rollToBackFloat';
+
+export interface LearnToSwimDrill {
+  kind: LearnToSwimDrillKind;
+  minutes: number;
+}
+
+export interface LearnToSwimDay {
+  dayNumber: number; // 1-based
+  stage: LearnToSwimStage;
+  drills: LearnToSwimDrill[];
+  totalMinutes: number;
+}
+
+export interface LearnToSwimPlan {
+  totalDays: number;
+  minutesPerDay: number;
+  days: LearnToSwimDay[];
+}
+
+/**
  * A short, typed coaching note for how to race a specific distance/stroke — not a formatted
  * sentence, same "structured, presentation-agnostic" pattern as SetStepKind/GymExercise (see
  * src/i18n/format.ts for the translated text). 'im' has no stroke-specific tactic (its tactics

@@ -12,7 +12,9 @@ duration, optional gym/strength sessions, units and pool length (meters/yards, 2
 pool equipment they own (fins, paddles, pull buoy, kickboard, snorkel, parachute, tempo
 trainer, ankle band), and optionally a recent time-trial result used to target real paces.
 Setting pool sessions to 0 switches the whole app into a gym/fitness-only mode for people who
-don't swim at all — see "Gym modes" below. The UI is available in English and Russian.
+don't swim at all — see "Gym modes" below. A separate "Learn" tab covers the case of someone who
+can't swim *at all yet* — a self-paced learn-to-swim curriculum, independent of the main
+training-plan profile — see "Learn to swim" below. The UI is available in English and Russian.
 Everything is local-first: there is no backend, no auth, no network calls. A profile, a
 completed-session history, and a language choice are saved to `AsyncStorage`; the week's plan
 is derived from the profile on the fly.
@@ -422,7 +424,7 @@ shared text itself is built by `src/i18n/format.ts`'s `formatDayShareText`, reus
 `formatSetStep`/`formatGymBlock` formatters the Plan screen renders with, so it's already
 localized and unit-aware.
 
-**Screens** (`src/app/`, expo-router, two tabs):
+**Screens** (`src/app/`, expo-router, three tabs):
 - `index.tsx` — "Plan" tab. Empty state with a CTA into onboarding if no profile is saved yet;
   otherwise a week summary plus one `Collapsible` (`src/components/ui/collapsible.tsx`) per day
   showing warmup/main/cooldown sets and/or the gym session for that day, a per-session
@@ -430,6 +432,7 @@ localized and unit-aware.
   `Collapsible` (stroke-count log + records/goals), and — only when signed in —
   `AthleteCoachPanel` (pending coach invites, and once on a team: coach-authored workouts,
   results, and both chat threads).
+- `learn.tsx` — "Learn" tab, the "learn to swim from zero" program — see its own section below.
 - `profile.tsx` — "Profile" tab/onboarding form (language, level, goal, units/pool length,
   session counts/durations, equipment, pace benchmark, gender, strokes/distances, backup, an
   `AccountSection` for optional cloud sign-in/out, `CoachDashboard` when signed in as a coach,
@@ -441,10 +444,55 @@ localized and unit-aware.
   `HistoryProvider` above don't need this trick since they seed from a *default* (`'en'`, `{}`)
   that's valid on its own, not from a value that only makes sense once loaded.
 
-Routing has exactly two top-level routes and intentionally does **not** use a nested
+Routing has exactly three top-level routes and intentionally does **not** use a nested
 stack/detail route for individual sessions, or a route for the privacy policy — day detail and
 the privacy policy are both shown inline via `Collapsible` accordions instead, to avoid fighting
 the template's dual native/web tab-bar setup (see below).
+
+**Learn to swim** (`src/domain/learnToSwim.ts`, `src/app/learn.tsx`): a completely separate,
+self-contained track for someone who can't swim at all yet — deliberately independent of
+`AthleteProfile`/`generateWeekPlan` (a total beginner may never have set one up, and the whole
+premise here is "not yet a swimmer"). `buildLearnToSwimPlan(minutesPerDay)` is a pure function,
+same contract as the main plan generator: a curated, ordered sequence of 7 curriculum stages
+(water comfort → floating → gliding → kicking → arm stroke → breathing coordination → full
+stroke + safety endurance — the classic learn-to-swim progression, standard instructional
+content, not a proprietary method), each stage a proportional slice of the total program length
+(`STAGE_PROPORTIONS`, largest-remainder apportionment via `allocateStageDays` so the parts sum
+to exactly the total). Each day picks 2-4 drills from that stage's catalog (`STAGE_DRILLS`),
+rotated by day-within-stage via the existing `rotateArray` (reused from `week.ts` — same
+"consecutive days shouldn't repeat identically" purpose as the main plan's zone rotation) and
+splits the chosen minutes-per-day across them via `splitMinutes` (largest-remainder again, so
+they sum back exactly).
+- **Adaptive pacing is the actual point of the feature**: the curriculum has a fixed total time
+  budget (`BASELINE_TOTAL_MINUTES` = 600, the reference "20 min/day → 30 days" pace roughly
+  matching typical adult learn-to-swim course lengths), so `computeTotalDays(minutesPerDay)`
+  divides that budget by whatever daily time the athlete chooses — more time/day genuinely
+  finishes the program in fewer calendar days (not "the same number of days with more content
+  crammed in"), down to a floor of `MIN_TOTAL_DAYS` (14): real motor-skill consolidation needs
+  repeated exposure across separate days, not just raw total minutes, so the program won't
+  compress below two weeks no matter how much time/day is chosen. `MAX_TOTAL_DAYS` (60) caps the
+  other end so a very small daily budget doesn't stretch into an absurd number of days.
+- **Progress is a plain sequential counter, not a per-day completion map**: `LearnToSwimProgress
+  { minutesPerDay, completedDays }` (`src/storage/learnToSwim-storage.ts`) — unlike the main
+  plan's history (a repeating weekly cycle, tracked by `weekKey:dayIndex:kind`), this curriculum
+  is strictly linear, so "how many days in a row completed" is the only state that means
+  anything; `currentDay` is just `plan.days[completedDays]`. Changing pace mid-program
+  recalculates the plan and clamps `completedDays` to the new `totalDays` rather than trying to
+  reconcile which specific day content was already done.
+- **Local-only, no cloud sync** (unlike `AthleteProfile`/history/stroke log): a small,
+  self-contained checklist that doesn't need cross-device continuity or coach visibility to be
+  useful — a deliberate scope decision, not an oversight, consistent with how the whole app
+  started local-only before Supabase was added.
+- **Safety disclaimer is load-bearing, not boilerplate**: shown on both the onboarding and active
+  views (`learnToSwim.safetyDisclaimer`) — teaching literal non-swimmers water skills carries
+  real risk, so the copy is explicit that this is unsupervised instructional content, not a
+  substitute for a lifeguard or supervising adult, and never to be practiced alone or in open
+  water while still learning.
+- **Third tab wiring**: per the template quirks below, both `app-tabs.tsx` and
+  `app-tabs.web.tsx` needed a new `Trigger`, plus a new native tab-bar icon
+  (`assets/images/tabIcons/learn.png` + `@2x`/`@3x`, a life-ring pictogram generated by
+  `scripts/generate-icons.js`'s `tabIconLearnSvg()` — added alongside `home.png`/`explore.png`,
+  which are template-scaffold defaults predating that script, not generated by it).
 
 ## Template quirks worth knowing before touching navigation
 
@@ -455,9 +503,10 @@ platform:
   each tab backed by a real PNG icon under `src/assets/images/tabIcons/`.
 - `src/components/app-tabs.web.tsx` — web: `expo-router/ui`'s `Tabs`, a custom-styled pill bar.
 
-Both are wired off the same route filenames (`index`, `profile`) and must be kept in sync by
-hand — there's no single source of truth for the tab list. Adding a third tab means editing
-both files (and adding an icon asset for the native one).
+Both are wired off the same route filenames (`index`, `learn`, `profile`) and must be kept in
+sync by hand — there's no single source of truth for the tab list. Adding a tab means editing
+both files (and adding an icon asset for the native one, as `learn` did — see "Learn to swim"
+above).
 
 `AGENTS.md` (imported above) is the template's own reminder that Expo SDK 57 is very new;
 when the exact behavior of an Expo/router/RN API here matters, check
