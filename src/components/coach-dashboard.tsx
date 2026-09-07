@@ -52,11 +52,13 @@ function TeamPanel({ team, onTeamCreated }: { team: TeamRow | null; onTeamCreate
   const { t } = useTranslation();
   const { session } = useAuth();
   const [teamName, setTeamName] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const theme = useTheme();
 
   async function handleCreate() {
     if (!teamName.trim() || !session) return;
-    const created = await createTeam(session.user.id, teamName.trim());
+    const { team: created, error: createError } = await createTeam(session.user.id, teamName.trim());
+    setError(createError);
     if (created) onTeamCreated(created);
   }
 
@@ -82,6 +84,11 @@ function TeamPanel({ team, onTeamCreated }: { team: TeamRow | null; onTeamCreate
           <ThemedText type="smallBold">{t('coach.team.create')}</ThemedText>
         </ThemedView>
       </Pressable>
+      {error && (
+        <ThemedText type="small" themeColor="textSecondary">
+          {error}
+        </ThemedText>
+      )}
     </View>
   );
 }

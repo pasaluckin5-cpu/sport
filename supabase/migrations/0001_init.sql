@@ -271,6 +271,33 @@ language sql security definer stable set search_path = public as $$
   );
 $$;
 
+-- Same reasoning as is_linked_coach_of/is_active_member_of above, for a different pair of
+-- tables: teams_select (below) needs to check "does auth.uid() belong to this team" (any
+-- status, so a not-yet-accepted invitee can still see the team they were invited to), and
+-- team_members' own policies need to check "does auth.uid() coach this team". Written as plain
+-- `exists (select 1 from team_members ...)` / `exists (select 1 from teams ...)` directly inside
+-- each other's policies, these two checks form a cycle — evaluating teams_select requires
+-- evaluating team_members' RLS, which requires evaluating teams' RLS again, and so on forever
+-- (Postgres error 42P17, "infinite recursion detected in policy"). A security-definer function
+-- bypasses RLS on the table it queries (it runs as the function's owner, not the calling role),
+-- which is exactly what breaks the cycle here, the same way is_linked_coach_of already avoids
+-- recursing through team_members' own policies.
+create or replace function is_member_of_team(target_team uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from team_members
+    where team_id = target_team and athlete_id = auth.uid()
+  );
+$$;
+
+create or replace function is_coach_of_team(target_team uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from teams
+    where id = target_team and coach_id = auth.uid()
+  );
+$$;
+
 -- A coach can only insert a team_members row if they already know the athlete's uuid — but
 -- profiles_select (below) only lets a coach read a profile they're *already* linked to, so
 -- there's no RLS-visible way to look an athlete up by email before the link exists. This RPC is
@@ -342,8 +369,7 @@ create policy "stroke_log_write" on stroke_log for all
 
 -- teams
 create policy "teams_select" on teams for select
-  using (coach_id = auth.uid() or is_admin()
-    or exists (select 1 from team_members tm where tm.team_id = teams.id and tm.athlete_id = auth.uid()));
+  using (coach_id = auth.uid() or is_admin() or is_member_of_team(id));
 create policy "teams_write" on teams for all
   using (coach_id = auth.uid() or is_admin()) with check (coach_id = auth.uid() or is_admin());
 
@@ -352,28 +378,18 @@ create policy "teams_write" on teams for all
 -- can flip their own row from 'pending' to 'active' (accept) — never create one for themselves,
 -- never accept a row that isn't theirs, never set any status but 'active' on their own row.
 create policy "team_members_select" on team_members for select
-  using (athlete_id = auth.uid() or is_admin()
-    or exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid()));
+  using (athlete_id = auth.uid() or is_admin() or is_coach_of_team(team_id));
 create policy "team_members_insert" on team_members for insert
-  with check (
-    status = 'pending'
-    and exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid())
-  );
+  with check (status = 'pending' and is_coach_of_team(team_id));
 create policy "team_members_update" on team_members for update
-  using (
-    athlete_id = auth.uid() or is_admin()
-    or exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid())
-  )
+  using (athlete_id = auth.uid() or is_admin() or is_coach_of_team(team_id))
   with check (
     (athlete_id = auth.uid() and status = 'active')
     or is_admin()
-    or exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid())
+    or is_coach_of_team(team_id)
   );
 create policy "team_members_delete" on team_members for delete
-  using (
-    athlete_id = auth.uid() or is_admin()
-    or exists (select 1 from teams t where t.id = team_members.team_id and t.coach_id = auth.uid())
-  );
+  using (athlete_id = auth.uid() or is_admin() or is_coach_of_team(team_id));
 
 -- workouts: only a linked coach can author one for their own athlete.
 create policy "workouts_select" on workouts for select
