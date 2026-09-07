@@ -390,7 +390,10 @@ function AthleteInsightsPanel({ athletes }: { athletes: TeamMemberWithEmail[] })
   const [profile, setProfile] = useState<AthleteProfile | null>(null);
   const [feedbackEntries, setFeedbackEntries] = useState<FeedbackHistoryEntry[]>([]);
   const [medical, setMedical] = useState<MedicalProfile | null>(null);
-  const [raceInDays, setRaceInDays] = useState(60);
+  const today = new Date();
+  const [raceYear, setRaceYear] = useState(today.getUTCFullYear());
+  const [raceMonth, setRaceMonth] = useState(today.getUTCMonth() + 1);
+  const [raceDay, setRaceDay] = useState(today.getUTCDate());
   const [message, setMessage] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -438,9 +441,9 @@ function AthleteInsightsPanel({ athletes }: { athletes: TeamMemberWithEmail[] })
   const racePlan = profile ? buildRaceDayPlan(profile) : undefined;
 
   async function handleSetRaceDate() {
-    const date = new Date();
-    date.setDate(date.getDate() + raceInDays);
-    const { error } = await setAthleteGoalRaceDate(athlete!.athlete_id, date.toISOString().slice(0, 10));
+    const mm = String(raceMonth).padStart(2, '0');
+    const dd = String(raceDay).padStart(2, '0');
+    const { error } = await setAthleteGoalRaceDate(athlete!.athlete_id, `${raceYear}-${mm}-${dd}`);
     setMessage(error ?? t('coach.insights.raceDateSet'));
     if (!error) refresh(athlete!.athlete_id);
   }
@@ -482,7 +485,26 @@ function AthleteInsightsPanel({ athletes }: { athletes: TeamMemberWithEmail[] })
                 {periodizationNoteText(phase, days, t)}
               </ThemedText>
             )}
-            <Stepper value={raceInDays} min={1} max={365} suffix={t('coach.insights.days')} onChange={setRaceInDays} />
+            <View style={styles.timeRow}>
+              <View style={styles.timeField}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('profile.goalRace.year')}
+                </ThemedText>
+                <Stepper value={raceYear} min={today.getUTCFullYear()} max={today.getUTCFullYear() + 3} onChange={setRaceYear} />
+              </View>
+              <View style={styles.timeField}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('profile.goalRace.month')}
+                </ThemedText>
+                <Stepper value={raceMonth} min={1} max={12} onChange={setRaceMonth} />
+              </View>
+              <View style={styles.timeField}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('profile.goalRace.day')}
+                </ThemedText>
+                <Stepper value={raceDay} min={1} max={31} onChange={setRaceDay} />
+              </View>
+            </View>
             <Pressable onPress={handleSetRaceDate} style={({ pressed }) => pressed && styles.pressed}>
               <ThemedView type="backgroundElement" style={styles.button}>
                 <ThemedText type="smallBold">{t('coach.insights.setRaceDate')}</ThemedText>
@@ -742,5 +764,12 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.8,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    gap: Spacing.five,
+  },
+  timeField: {
+    gap: Spacing.one,
   },
 });
