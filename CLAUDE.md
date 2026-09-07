@@ -341,24 +341,51 @@ deserves its own explicit consent step, not a silent default. `Injury.area` reus
 `PainArea` type (already used by `SessionFeedback.pain`) rather than inventing a duplicate.
 Every adjustment mirrors the "downgrade a day, don't drop it" pattern already established by the
 feedback/periodization system:
-- `medicalZoneCap`/`capZoneIntensity` cap the hardest pool zone the generator will schedule —
-  `recentSurgery` caps at `aerobicBase`, a `heartCondition` or `pregnancy` caps at `threshold` —
-  standard general caution (go all-out only once cleared by a doctor), not a novel medical claim.
-- `medicalVolumeMultiplier` folds into the same combined volume multiplier as periodization/
-  feedback/adherence (`Math.min(1.1, Math.max(0.5, ...))`) — recent surgery cuts hardest (0.7),
-  any other flagged condition cuts mildly (0.9), and each declared injury contributes its own
-  severity-scaled cut (`INJURY_SEVERITY_MULTIPLIER`: mild 1 / moderate 0.9 / severe 0.75). Takes
-  the **minimum** (most conservative) across all simultaneous signals rather than multiplying
-  them together, so several flags at once don't compound into an unrealistically tiny session.
+- **Conditions get condition-specific adjustments, not one flat "any condition = be careful"
+  rule** — each of the eight `MedicalCondition`s maps to its own combination of a zone cap,
+  volume cut, and (for some) an equipment or exercise exclusion, based on well-known general
+  exercise-caution guidance for that condition specifically:
+  - `medicalZoneCap`/`capZoneIntensity` cap the hardest pool zone the generator will schedule,
+    via `CONDITION_ZONE_CAP` — `recentSurgery` caps hardest, at `aerobicBase` (still healing);
+    `heartCondition`, `pregnancy`, and `highBloodPressure` cap at `threshold` (moderate steady
+    effort is fine; max-effort/near-max-heart-rate or acute-BP-spiking work needs a doctor's
+    clearance first); `asthma` and `epilepsy` cap one tier higher, at `vo2max` (sustained hard
+    intervals are fine, but repeated all-out sprints with minimal recovery — a common
+    bronchospasm trigger for asthma, or the breath-holding/hyperventilation pattern of max-effort
+    sprints, a possible seizure-risk factor for epilepsy — are the specific thing avoided);
+    `diabetes` and `other` have no zone cap (their caution is about volume/duration, not an
+    intensity ceiling — see next point). When several conditions are flagged at once, the
+    **most restrictive** cap across all of them wins, not just the first match.
+  - `medicalVolumeMultiplier` folds into the same combined volume multiplier as periodization/
+    feedback/adherence (`Math.min(1.1, Math.max(0.5, ...))`), via `CONDITION_VOLUME_MULTIPLIER` —
+    `recentSurgery` cuts hardest (0.7); `heartCondition`, `pregnancy`, and `diabetes` cut
+    next-hardest (0.85 — diabetes specifically because hypoglycemia risk rises with session
+    duration even without a hard effort, so trimming volume is the relevant caution there rather
+    than an intensity ceiling); every other condition (`highBloodPressure`, `asthma`, `epilepsy`,
+    `other`) gets a mild baseline cut (0.9) alongside whatever more specific adjustment it also
+    gets. Each declared injury separately contributes its own severity-scaled cut
+    (`INJURY_SEVERITY_MULTIPLIER`: mild 1 / moderate 0.9 / severe 0.75). Takes the **minimum**
+    (most conservative) across every simultaneous signal rather than multiplying them together,
+    so several flags at once don't compound into an unrealistically tiny session.
+  - `equipmentToAvoidForMedical` drops specific pool equipment for a flagged condition — `asthma`
+    drops the drag `parachute` (it adds substantial breathing resistance right when sprint sets
+    already demand the most air), `epilepsy` drops the `snorkel` (could complicate breathing/
+    rescue if a seizure happened in the water) — merged into `assemblePoolSession`'s existing
+    equipment-exclusion mechanism (`planGenerator.ts`) the same way shoulder-pain feedback
+    already drops `paddles` for the week, not a permanently lost piece of gear.
+  - `exercisesToAvoidForMedical` (exercise-level, not focus-level — it has to work for
+    swim-dryland's phase-based exercise lists just as much as general-fitness's focus catalogs)
+    takes both injuries and conditions. By injury: heavy pressing/pulling for shoulder,
+    squat/hinge/jump patterns for knee, loaded flexion/heavy hinging for back. By condition:
+    `highBloodPressure` and `pregnancy` both drop explosive/plyometric exercises (`squatJump`,
+    `medBallRotationalThrow` — the same two exercises the swim-dryland peak/taper phases add as
+    an explosive primer) since a maximal, breath-holding (Valsalva-type) effort can spike blood
+    pressure acutely, and general prenatal exercise guidance is to avoid new high-impact/
+    explosive movements. Both folded into the same `filterGymBlocks` safety filter used for the
+    swim-dryland leg/shoulder rules above (with the same floor: never drop below 2 blocks).
 - `strokesToAvoid` swaps a stroke out for freestyle when it loads an injured area with a
   well-known mechanism — breaststroke's whip kick for a knee injury, butterfly's repetitive
   spinal extension for a back injury.
-- `exercisesToAvoidForMedical` (exercise-level, not focus-level — it has to work for
-  swim-dryland's phase-based exercise lists just as much as general-fitness's focus catalogs)
-  drops specific gym exercises for a flagged injury area (heavy pressing/pulling for shoulder,
-  squat/hinge/jump patterns for knee, loaded flexion/heavy hinging for back) — folded into the
-  same `filterGymBlocks` safety filter used for the swim-dryland leg/shoulder rules above (with
-  the same floor: never drop below 2 blocks).
 - Mechanical avoidance (stroke/exercise swaps, zone cap) is **severity-independent** — any
   severity of a flagged injury triggers it immediately, erring toward caution on injury risk
   rather than waiting to confirm a trend — while volume reduction is the one severity-scaled

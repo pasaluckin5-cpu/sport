@@ -1,4 +1,4 @@
-import { GymExercise, Injury, InjurySeverity, MedicalCondition, MedicalProfile, PainArea, RaceStroke, Zone } from './types';
+import { Equipment, GymExercise, Injury, InjurySeverity, MedicalCondition, MedicalProfile, PainArea, RaceStroke, Zone } from './types';
 
 /**
  * Self-declared medical data, not diagnosed — everything below is a general, conservative
@@ -16,10 +16,6 @@ function hasInjury(medical: MedicalProfile | undefined, area: PainArea): Injury 
   return medical?.injuries.find((i) => i.area === area);
 }
 
-function hasCondition(medical: MedicalProfile | undefined, condition: MedicalCondition): boolean {
-  return !!medical?.conditions.includes(condition);
-}
-
 export function hasAnyMedicalCaution(medical: MedicalProfile | undefined): boolean {
   return !!medical && (medical.injuries.length > 0 || medical.conditions.length > 0);
 }
@@ -31,15 +27,42 @@ export function hasShoulderInjury(medical: MedicalProfile | undefined): boolean 
 const ZONE_INTENSITY_ORDER: Zone[] = ['recovery', 'technique', 'aerobicBase', 'threshold', 'vo2max', 'sprint'];
 
 /**
- * A conservative max training zone for conditions where going all-out without medical clearance
- * is standard general caution, not a novel claim: recent surgery caps hardest (still in general
- * recovery), a heart condition or pregnancy caps at the next tier down (moderate effort is
- * broadly fine; max-effort/near-max-heart-rate work should be cleared by a doctor first).
+ * A conservative max training zone per condition, where going all-out without medical clearance
+ * is standard general caution, not a novel claim — each condition caps at a different tier based
+ * on well-known general exercise guidance, not a flat "any condition = be careful":
+ * - `recentSurgery` caps hardest (`aerobicBase`) — still in general recovery.
+ * - `heartCondition`, `pregnancy`, `highBloodPressure` cap at `threshold` — moderate, steady
+ *   effort is broadly fine; max-effort/near-max-heart-rate or acute-BP-spiking work (all-out
+ *   sprints) should be cleared by a doctor first.
+ * - `asthma`, `epilepsy` cap one tier higher, at `vo2max` — sustained hard intervals are fine,
+ *   but repeated all-out sprints with minimal recovery (a common bronchospasm trigger for
+ *   asthma) or the breath-holding/hyperventilation pattern of max-effort sprint sets (a
+ *   possible seizure-risk factor for epilepsy) are the specific thing to avoid, not moderate-
+ *   hard aerobic work.
+ * - `diabetes` and `other` have no zone cap — the general caution there is about session
+ *   duration/monitoring (see medicalVolumeMultiplier), not an intensity ceiling.
  */
+const CONDITION_ZONE_CAP: Partial<Record<MedicalCondition, Zone>> = {
+  recentSurgery: 'aerobicBase',
+  heartCondition: 'threshold',
+  pregnancy: 'threshold',
+  highBloodPressure: 'threshold',
+  asthma: 'vo2max',
+  epilepsy: 'vo2max',
+};
+
+/** The most restrictive (lowest-intensity) cap across every flagged condition, or undefined if none apply. */
 export function medicalZoneCap(medical: MedicalProfile | undefined): Zone | undefined {
-  if (hasCondition(medical, 'recentSurgery')) return 'aerobicBase';
-  if (hasCondition(medical, 'heartCondition') || hasCondition(medical, 'pregnancy')) return 'threshold';
-  return undefined;
+  if (!medical) return undefined;
+  let cap: Zone | undefined;
+  for (const condition of medical.conditions) {
+    const conditionCap = CONDITION_ZONE_CAP[condition];
+    if (!conditionCap) continue;
+    if (!cap || ZONE_INTENSITY_ORDER.indexOf(conditionCap) < ZONE_INTENSITY_ORDER.indexOf(cap)) {
+      cap = conditionCap;
+    }
+  }
+  return cap;
 }
 
 /** Downgrades `zone` to `cap` if it's more intense than the cap; leaves it alone otherwise (or if there's no cap). */
@@ -53,14 +76,40 @@ export function capZoneIntensity(zone: Zone, cap: Zone | undefined): Zone {
 const INJURY_SEVERITY_MULTIPLIER: Record<InjurySeverity, number> = { mild: 1, moderate: 0.9, severe: 0.75 };
 
 /**
- * The most conservative applicable volume cut — recent surgery cuts hardest, any other flagged
- * condition cuts mildly, and each injury contributes its own severity-scaled cut. Takes the
- * minimum (worst case) across all of these rather than multiplying them together, so several
- * simultaneous flags don't compound into an unrealistically tiny session.
+ * Per-condition volume cut — distinct from the zone cap above (a condition can call for shorter/
+ * lighter sessions without necessarily capping peak intensity, e.g. diabetes): `recentSurgery`
+ * cuts hardest (still healing); `heartCondition`, `pregnancy`, and `diabetes` cut next-hardest
+ * (0.85) — a heart condition and pregnancy both already carry a zone cap above, and diabetes
+ * carries hypoglycemia risk that rises with prolonged session duration even without a hard
+ * effort, so cutting overall volume is the relevant general caution there rather than an
+ * intensity ceiling; every other flagged condition (`highBloodPressure`, `asthma`, `epilepsy`,
+ * `other`) gets the mildest general cut (0.9) — "declared something, so trim volume a bit" as a
+ * baseline caution alongside whatever more specific adjustment that condition also gets
+ * (zone cap, equipment/exercise avoidance — see below).
+ */
+const CONDITION_VOLUME_MULTIPLIER: Record<MedicalCondition, number> = {
+  recentSurgery: 0.7,
+  heartCondition: 0.85,
+  pregnancy: 0.85,
+  diabetes: 0.85,
+  highBloodPressure: 0.9,
+  asthma: 0.9,
+  epilepsy: 0.9,
+  other: 0.9,
+};
+
+/**
+ * The most conservative applicable volume cut — each flagged condition contributes its own cut
+ * (see CONDITION_VOLUME_MULTIPLIER) and each injury contributes its own severity-scaled cut.
+ * Takes the minimum (worst case) across all of these rather than multiplying them together, so
+ * several simultaneous flags don't compound into an unrealistically tiny session.
  */
 export function medicalVolumeMultiplier(medical: MedicalProfile | undefined): number {
   if (!medical) return 1;
-  let mult = hasCondition(medical, 'recentSurgery') ? 0.7 : medical.conditions.length > 0 ? 0.9 : 1;
+  let mult = 1;
+  for (const condition of medical.conditions) {
+    mult = Math.min(mult, CONDITION_VOLUME_MULTIPLIER[condition]);
+  }
   for (const injury of medical.injuries) {
     mult = Math.min(mult, INJURY_SEVERITY_MULTIPLIER[injury.severity]);
   }
@@ -89,11 +138,50 @@ const EXERCISES_TO_AVOID_BY_INJURY: Record<PainArea, GymExercise[]> = {
   other: [],
 };
 
+/**
+ * Explosive/plyometric exercises to drop for a flagged condition — `highBloodPressure` because a
+ * maximal, breath-holding (Valsalva-type) effort like a jump or a rotational throw can spike
+ * blood pressure acutely; `pregnancy` because general prenatal exercise guidance is to avoid new
+ * high-impact/explosive movements. Both point at the same two exercises (also the ones the
+ * swim-dryland peak/taper phases add as an explosive primer — see SWIM_SC_PROGRAM in
+ * workoutLibrary.ts), so this reuses `filterGymBlocks`'s floor-of-2 safety net exactly like the
+ * per-injury exclusions above.
+ */
+const EXERCISES_TO_AVOID_BY_CONDITION: Partial<Record<MedicalCondition, GymExercise[]>> = {
+  highBloodPressure: ['squatJump', 'medBallRotationalThrow'],
+  pregnancy: ['squatJump', 'medBallRotationalThrow'],
+};
+
 export function exercisesToAvoidForMedical(medical: MedicalProfile | undefined): GymExercise[] {
   if (!medical) return [];
   const avoided = new Set<GymExercise>();
   for (const injury of medical.injuries) {
     for (const exercise of EXERCISES_TO_AVOID_BY_INJURY[injury.area]) avoided.add(exercise);
+  }
+  for (const condition of medical.conditions) {
+    for (const exercise of EXERCISES_TO_AVOID_BY_CONDITION[condition] ?? []) avoided.add(exercise);
+  }
+  return Array.from(avoided);
+}
+
+/**
+ * Pool equipment to drop for a flagged condition — `asthma` because a drag parachute adds
+ * substantial breathing resistance right when sprint sets already demand the most air; `epilepsy`
+ * because a snorkel could complicate breathing/rescue if a seizure happened in the water. Merged
+ * into the athlete's equipment the same way shoulder-pain feedback already drops `paddles` (see
+ * planGenerator.ts's assemblePoolSession) — a downgrade for the week, not a permanently lost
+ * piece of gear.
+ */
+const EQUIPMENT_TO_AVOID_BY_CONDITION: Partial<Record<MedicalCondition, Equipment[]>> = {
+  asthma: ['parachute'],
+  epilepsy: ['snorkel'],
+};
+
+export function equipmentToAvoidForMedical(medical: MedicalProfile | undefined): Equipment[] {
+  if (!medical) return [];
+  const avoided = new Set<Equipment>();
+  for (const condition of medical.conditions) {
+    for (const equipment of EQUIPMENT_TO_AVOID_BY_CONDITION[condition] ?? []) avoided.add(equipment);
   }
   return Array.from(avoided);
 }

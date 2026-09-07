@@ -1,5 +1,6 @@
 import {
   capZoneIntensity,
+  equipmentToAvoidForMedical,
   exercisesToAvoidForMedical,
   hasShoulderInjury,
   medicalVolumeMultiplier,
@@ -18,7 +19,7 @@ import {
   summarizeFeedback,
   volumeMultiplier,
 } from './periodization';
-import { AthleteProfile, DayPlan, GymFocus, GymMode, MedicalProfile, PoolSession, RaceStroke, SessionFeedback, TrainingGoal, WeekCompletionCount, WeekPlan, Zone } from './types';
+import { AthleteProfile, DayPlan, Equipment, GymFocus, GymMode, MedicalProfile, PoolSession, RaceStroke, SessionFeedback, TrainingGoal, WeekCompletionCount, WeekPlan, Zone } from './types';
 import {
   basePace100Sec,
   buildCooldown,
@@ -102,6 +103,8 @@ interface PoolSessionAdjustments {
   /** Standing injuries only (see src/domain/medical.ts) — a self-declared, persistent condition, not a one-off feedback flag. */
   avoidedStrokes: RaceStroke[];
   medicalZoneCap: Zone | undefined;
+  /** Pool equipment to drop for a flagged medical condition (see src/domain/medical.ts's equipmentToAvoidForMedical). */
+  medicalExcludeEquipment: Equipment[];
 }
 
 function assemblePoolSession(
@@ -111,12 +114,18 @@ function assemblePoolSession(
   weekOffset: number,
   adjustments: PoolSessionAdjustments,
 ): PoolSession {
-  const { volumeMult, avoidShoulder, avoidedStrokes, medicalZoneCap: zoneCap } = adjustments;
+  const { volumeMult, avoidShoulder, avoidedStrokes, medicalZoneCap: zoneCap, medicalExcludeEquipment } = adjustments;
   const cappedZone = capZoneIntensity(zone, zoneCap);
   const { level, poolSessionDurationMin: durationMin, unit, poolLength, benchmark, primaryStrokes, primaryDistances } = profile;
   // Skip paddles (extra shoulder loading) for the week when recent feedback flagged shoulder
-  // pain — same "downgrade, don't drop the day" pattern already used for a hard-swim-eve leg day.
-  const equipment = avoidShoulder ? profile.equipment.filter((e) => e !== 'paddles') : profile.equipment;
+  // pain — same "downgrade, don't drop the day" pattern already used for a hard-swim-eve leg day —
+  // plus whatever other equipment a flagged medical condition calls for avoiding this week (e.g.
+  // a drag parachute for asthma, a snorkel for epilepsy — see src/domain/medical.ts).
+  const excludedEquipment = new Set<Equipment>([
+    ...(avoidShoulder ? (['paddles'] as Equipment[]) : []),
+    ...medicalExcludeEquipment,
+  ]);
+  const equipment = profile.equipment.filter((e) => !excludedEquipment.has(e));
   const volume = sessionVolume(level, durationMin, unit, poolLength, benchmark) * volumeMult;
   const warmupDistance = roundToPoolLength(volume * 0.18, poolLength);
   const cooldownDistance = roundToPoolLength(volume * 0.12, poolLength);
@@ -201,6 +210,7 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
   const avoidShoulder = avoidShoulderLoad(feedbackSummary) || hasShoulderInjury(options.medical);
   const avoidedStrokes = strokesToAvoid(options.medical);
   const medicalExcludeExercises = exercisesToAvoidForMedical(options.medical);
+  const medicalExcludeEquipment = equipmentToAvoidForMedical(options.medical);
   const zoneCap = medicalZoneCap(options.medical);
   const overloaded = overloadedZones(options.feedbackHistory);
 
@@ -218,7 +228,13 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
 
   const days: DayPlan[] = Array.from({ length: 7 }, (_, dayIndex) => ({ dayIndex }));
 
-  const poolAdjustments: PoolSessionAdjustments = { volumeMult, avoidShoulder, avoidedStrokes, medicalZoneCap: zoneCap };
+  const poolAdjustments: PoolSessionAdjustments = {
+    volumeMult,
+    avoidShoulder,
+    avoidedStrokes,
+    medicalZoneCap: zoneCap,
+    medicalExcludeEquipment,
+  };
   poolDays.forEach((dayIndex, i) => {
     days[dayIndex].pool = assemblePoolSession(zones[i], profile, i, strokeOffset, poolAdjustments);
   });

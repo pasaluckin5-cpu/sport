@@ -466,4 +466,87 @@ describe('medical adjustments', () => {
     expect(noOption.days).toEqual(emptyMedical.days);
     expect(noOption.totalPoolDistance).toBe(emptyMedical.totalPoolDistance);
   });
+
+  it('drops the drag parachute from pool sets for asthma, and caps out repeated all-out sprints', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 7, goal: 'speed', equipment: ['parachute'] });
+    const plan = generateWeekPlan(profile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [], conditions: ['asthma'] },
+    });
+    for (const day of plan.days) {
+      if (!day.pool) continue;
+      expect(day.pool.zone).not.toBe('sprint');
+      expect(day.pool.equipmentUsed).not.toContain('parachute');
+    }
+  });
+
+  it('drops the snorkel from pool sets for epilepsy', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 7, equipment: ['snorkel'] });
+    const plan = generateWeekPlan(profile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [], conditions: ['epilepsy'] },
+    });
+    for (const day of plan.days) {
+      if (day.pool) expect(day.pool.equipmentUsed).not.toContain('snorkel');
+    }
+  });
+
+  it('excludes explosive/plyometric exercises from gym blocks for high blood pressure', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 3, gymSessionsPerWeek: 3 });
+    const plan = generateWeekPlan(profile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [], conditions: ['highBloodPressure'] },
+    });
+    for (const day of plan.days) {
+      if (!day.gym) continue;
+      for (const block of day.gym.blocks) {
+        expect(['squatJump', 'medBallRotationalThrow']).not.toContain(block.exercise);
+      }
+    }
+  });
+
+  it('caps pool zone intensity and drops explosive gym exercises for pregnancy', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 3, gymSessionsPerWeek: 3, goal: 'speed' });
+    const plan = generateWeekPlan(profile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [], conditions: ['pregnancy'] },
+    });
+    for (const day of plan.days) {
+      if (day.pool) expect(['vo2max', 'sprint']).not.toContain(day.pool.zone);
+      if (day.gym) {
+        for (const block of day.gym.blocks) {
+          expect(['squatJump', 'medBallRotationalThrow']).not.toContain(block.exercise);
+        }
+      }
+    }
+  });
+
+  it('applies no zone cap for diabetes, only a volume reduction', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 7, goal: 'speed' });
+    const neutralPlan = generateWeekPlan(profile, { weekKey: '2026-W10' });
+    const diabetesPlan = generateWeekPlan(profile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [], conditions: ['diabetes'] },
+    });
+    // Same zone rotation (no cap applied)...
+    expect(diabetesPlan.days.map((d) => d.pool?.zone)).toEqual(neutralPlan.days.map((d) => d.pool?.zone));
+    // ...but less total volume.
+    expect(diabetesPlan.totalPoolDistance).toBeLessThan(neutralPlan.totalPoolDistance);
+  });
+
+  it('gives different conditions distinguishable effects on the same profile', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 7, goal: 'speed', equipment: ['parachute', 'snorkel'] });
+    const asthmaPlan = generateWeekPlan(profile, { weekKey: '2026-W10', medical: { injuries: [], conditions: ['asthma'] } });
+    const epilepsyPlan = generateWeekPlan(profile, { weekKey: '2026-W10', medical: { injuries: [], conditions: ['epilepsy'] } });
+    const heartPlan = generateWeekPlan(profile, { weekKey: '2026-W10', medical: { injuries: [], conditions: ['heartCondition'] } });
+    // Asthma drops the parachute but keeps the snorkel; epilepsy is the reverse.
+    const asthmaEquip = new Set(asthmaPlan.days.flatMap((d) => d.pool?.equipmentUsed ?? []));
+    const epilepsyEquip = new Set(epilepsyPlan.days.flatMap((d) => d.pool?.equipmentUsed ?? []));
+    expect(asthmaEquip.has('parachute')).toBe(false);
+    expect(epilepsyEquip.has('snorkel')).toBe(false);
+    // Asthma/epilepsy only cap out sprint (vo2max is still allowed); a heart condition caps
+    // harder, at threshold.
+    expect(asthmaPlan.days.some((d) => d.pool?.zone === 'vo2max')).toBe(true);
+    expect(heartPlan.days.some((d) => d.pool?.zone === 'vo2max')).toBe(false);
+  });
 });

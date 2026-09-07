@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   capZoneIntensity,
   EMPTY_MEDICAL,
+  equipmentToAvoidForMedical,
   exercisesToAvoidForMedical,
   hasAnyMedicalCaution,
   hasShoulderInjury,
@@ -42,13 +43,29 @@ describe('medicalZoneCap', () => {
     expect(medicalZoneCap({ injuries: [], conditions: ['recentSurgery'] })).toBe('aerobicBase');
   });
 
-  it('caps at threshold for a heart condition or pregnancy', () => {
+  it('caps at threshold for a heart condition, pregnancy, or high blood pressure', () => {
     expect(medicalZoneCap({ injuries: [], conditions: ['heartCondition'] })).toBe('threshold');
     expect(medicalZoneCap({ injuries: [], conditions: ['pregnancy'] })).toBe('threshold');
+    expect(medicalZoneCap({ injuries: [], conditions: ['highBloodPressure'] })).toBe('threshold');
+  });
+
+  it('caps one tier higher, at vo2max, for asthma or epilepsy', () => {
+    expect(medicalZoneCap({ injuries: [], conditions: ['asthma'] })).toBe('vo2max');
+    expect(medicalZoneCap({ injuries: [], conditions: ['epilepsy'] })).toBe('vo2max');
+  });
+
+  it('has no zone cap for diabetes or an unspecified condition (caution there is about volume, not intensity)', () => {
+    expect(medicalZoneCap({ injuries: [], conditions: ['diabetes'] })).toBeUndefined();
+    expect(medicalZoneCap({ injuries: [], conditions: ['other'] })).toBeUndefined();
   });
 
   it('recent surgery takes priority over a milder cap when both are present', () => {
     expect(medicalZoneCap({ injuries: [], conditions: ['recentSurgery', 'heartCondition'] })).toBe('aerobicBase');
+  });
+
+  it('takes the most restrictive cap across several conditions regardless of declaration order', () => {
+    expect(medicalZoneCap({ injuries: [], conditions: ['asthma', 'heartCondition'] })).toBe('threshold');
+    expect(medicalZoneCap({ injuries: [], conditions: ['heartCondition', 'asthma'] })).toBe('threshold');
   });
 });
 
@@ -78,8 +95,17 @@ describe('medicalVolumeMultiplier', () => {
     expect(medicalVolumeMultiplier({ injuries: [], conditions: ['recentSurgery'] })).toBe(0.7);
   });
 
-  it('cuts volume mildly for any other flagged condition', () => {
+  it('cuts volume mildly for a condition with no more specific adjustment', () => {
     expect(medicalVolumeMultiplier({ injuries: [], conditions: ['asthma'] })).toBe(0.9);
+    expect(medicalVolumeMultiplier({ injuries: [], conditions: ['highBloodPressure'] })).toBe(0.9);
+    expect(medicalVolumeMultiplier({ injuries: [], conditions: ['epilepsy'] })).toBe(0.9);
+    expect(medicalVolumeMultiplier({ injuries: [], conditions: ['other'] })).toBe(0.9);
+  });
+
+  it('cuts volume harder for a heart condition, pregnancy, or diabetes', () => {
+    expect(medicalVolumeMultiplier({ injuries: [], conditions: ['heartCondition'] })).toBe(0.85);
+    expect(medicalVolumeMultiplier({ injuries: [], conditions: ['pregnancy'] })).toBe(0.85);
+    expect(medicalVolumeMultiplier({ injuries: [], conditions: ['diabetes'] })).toBe(0.85);
   });
 
   it('scales the cut by injury severity', () => {
@@ -155,5 +181,55 @@ describe('exercisesToAvoidForMedical', () => {
     // 'squats' and 'romanianDeadlift' are shared between knee and back exclusion lists.
     expect(avoided.filter((e) => e === 'squats')).toHaveLength(1);
     expect(avoided.filter((e) => e === 'romanianDeadlift')).toHaveLength(1);
+  });
+
+  it('lists explosive/plyometric exercises for high blood pressure or pregnancy', () => {
+    const bp = exercisesToAvoidForMedical({ injuries: [], conditions: ['highBloodPressure'] });
+    expect(bp).toEqual(expect.arrayContaining(['squatJump', 'medBallRotationalThrow']));
+    const pregnancy = exercisesToAvoidForMedical({ injuries: [], conditions: ['pregnancy'] });
+    expect(pregnancy).toEqual(expect.arrayContaining(['squatJump', 'medBallRotationalThrow']));
+  });
+
+  it('has no exercise exclusions for conditions without a specific list (asthma, diabetes, etc.)', () => {
+    expect(exercisesToAvoidForMedical({ injuries: [], conditions: ['asthma'] })).toEqual([]);
+    expect(exercisesToAvoidForMedical({ injuries: [], conditions: ['diabetes'] })).toEqual([]);
+  });
+
+  it('combines and de-duplicates injury-based and condition-based exclusions', () => {
+    const avoided = exercisesToAvoidForMedical({
+      injuries: [{ area: 'back', severity: 'mild' }],
+      conditions: ['highBloodPressure'],
+    });
+    // 'squatJump' and 'medBallRotationalThrow' are shared between the back-injury and
+    // highBloodPressure exclusion lists.
+    expect(avoided.filter((e) => e === 'squatJump')).toHaveLength(1);
+    expect(avoided.filter((e) => e === 'medBallRotationalThrow')).toHaveLength(1);
+  });
+});
+
+describe('equipmentToAvoidForMedical', () => {
+  it('is empty with no conditions', () => {
+    expect(equipmentToAvoidForMedical(undefined)).toEqual([]);
+    expect(equipmentToAvoidForMedical(EMPTY_MEDICAL)).toEqual([]);
+    expect(equipmentToAvoidForMedical({ injuries: [{ area: 'shoulder', severity: 'mild' }], conditions: [] })).toEqual([]);
+  });
+
+  it('avoids the drag parachute for asthma (added breathing resistance during sprint work)', () => {
+    expect(equipmentToAvoidForMedical({ injuries: [], conditions: ['asthma'] })).toEqual(['parachute']);
+  });
+
+  it('avoids the snorkel for epilepsy (airway/rescue concern in the water)', () => {
+    expect(equipmentToAvoidForMedical({ injuries: [], conditions: ['epilepsy'] })).toEqual(['snorkel']);
+  });
+
+  it('has no equipment exclusion for conditions without a specific rule', () => {
+    expect(equipmentToAvoidForMedical({ injuries: [], conditions: ['diabetes'] })).toEqual([]);
+    expect(equipmentToAvoidForMedical({ injuries: [], conditions: ['highBloodPressure'] })).toEqual([]);
+  });
+
+  it('combines exclusions from multiple flagged conditions', () => {
+    const avoided = equipmentToAvoidForMedical({ injuries: [], conditions: ['asthma', 'epilepsy'] });
+    expect(avoided).toEqual(expect.arrayContaining(['parachute', 'snorkel']));
+    expect(avoided).toHaveLength(2);
   });
 });
