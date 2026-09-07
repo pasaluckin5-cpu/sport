@@ -499,12 +499,14 @@ together, so this purely widens read access, it can't accidentally narrow anythi
   by email via `add_friend_by_email()` (same security-definer-RPC pattern as
   `invite_athlete_by_email()`, for the same reason — a stranger's uuid isn't otherwise
   discoverable); only the recipient can accept.
-- **Deliberately narrow read grant** — the point flagged below before this shipped: friends get
-  `results` (what the request asked for — "follow their results") and just the `profiles` row
+- **Deliberately narrow read grant, later widened by exactly one table**: friends originally got
+  only `results` (what the request asked for — "follow their results") and the `profiles` row
   (email for display, `gender` so `friendResultProgressText` can compute a real ЕВСК rank/goal
-  for a friend's freestyle results) — never `athlete_profiles`/`completions`/`stroke_log`, which
-  stay coach-only. A friend is a peer to compare times with, not someone who sees your training
-  schedule.
+  for a friend's freestyle results) — `athlete_profiles`/`completions`/`stroke_log` stayed
+  coach-only. `0005_friends_plan_visibility.sql` (below) widened exactly `athlete_profiles` so a
+  friend can preview the plan it generates; `completions`/`stroke_log` (history, feedback, stroke
+  log) are still coach-only. A friend is a peer who can see what your plan looks like, not
+  someone who sees your actual training history or how sessions felt.
 - **UI reuses the individual Progress section's own logic**: `src/i18n/format.ts`'s
   `friendResultProgressText` factors the shared comparison logic out of `recordsProgressText`
   (`buildRecordsProgress`) so a friend's logged result gets the same world-record/ЕВСК-rank
@@ -585,6 +587,37 @@ settings.
   own Profile screen already uses.
 - **`deleteCloudData`** (`src/supabase/sync.ts`, the "delete my cloud data" action) now also
   deletes this table's row for the user, alongside the tables it already covered.
+
+## Friends can view each other's training plan (supabase/migrations/0005_friends_plan_visibility.sql)
+
+A fifth additive migration, widening exactly one policy: `athlete_profiles_select` now also
+allows `is_friend_of(user_id)` (dropped and recreated with the extra clause, since Postgres
+policies don't support an in-place `ALTER ... USING`, unlike adding a brand-new policy the way
+0002/0003/0004 each did for their own tables).
+
+- **Why `athlete_profiles` specifically**: `generateWeekPlan` (`src/domain/planGenerator.ts`) is
+  a pure function of just `AthleteProfile` — there's no separate persisted "plan" row anywhere
+  (see "State/persistence" above) — so the *only* way to let a friend preview a plan at all is to
+  let them read the profile it's generated from. No new table, no new sync function:
+  `fetchCloudProfile` (`src/supabase/sync.ts`) already works for any `userId`, RLS just now
+  permits a friend's id where it didn't before.
+- **No extra opt-in, unlike medical (0004)**: accepting a friend request is itself the consent
+  step — the same reasoning `is_linked_coach_of` already relies on for a coach's unconditional
+  `athlete_profiles` access (joining a team implies sharing the training profile). A weekly
+  schedule/goal/equipment profile isn't in the same sensitivity class as self-declared injuries
+  and conditions, which is why medical data got its own dedicated opt-in table and self-declared
+  data justified a stricter bar there.
+- **`completions`/`stroke_log` are deliberately untouched** — a friend can see what the plan
+  *looks like*, not the athlete's actual completion history, logged feedback, or stroke-count
+  trend. That boundary (peer who compares times, not someone who sees your training history) is
+  unchanged from 0002.
+- **Client-side rendering, not a new table**: `src/components/week-plan-view.tsx`'s
+  `WeekPlanView` renders a fetched `WeekPlan` read-only (no mark-done/feedback/share controls,
+  which act on the viewer's own completion history) using the same `formatSetStep`/
+  `formatGymBlock` formatters the athlete's own Plan screen and the coach dashboard's
+  `WorkoutCard` already render sessions with. `FriendsPanel`'s "View plan" toggle calls
+  `fetchCloudProfile(friendId)` then `generateWeekPlan(friendProfile)` entirely client-side —
+  RLS is the only enforcement point; the app has no separate authorization check to keep in sync.
 
 ## Still open / out of scope for this pass
 

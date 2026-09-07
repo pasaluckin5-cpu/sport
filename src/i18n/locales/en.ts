@@ -371,6 +371,9 @@ export default {
     remove: 'Remove',
     empty: 'No friends yet — add one by email above to follow their results.',
     noResults: 'No results logged yet.',
+    viewPlan: 'View plan',
+    hidePlan: 'Hide plan',
+    noPlan: "This friend hasn't set up a training plan yet.",
   },
   athleteCoach: {
     invitesTitle: 'Coach invites',
@@ -633,7 +636,7 @@ export default {
       'If you create an account (below), that same data is instead stored in a cloud database (Supabase) so it can sync across your devices. Your email/password are handled by Supabase\'s authentication service — we never see or store your password ourselves.',
       "If you join a coach's team, that coach can see your profile settings, history, stroke-count log, and results, and can message you and assign workouts — a coach can never see another athlete's data unless that athlete is also on one of their teams. Leaving (or never joining) a team means no coach can see any of your data.",
       'Your self-declared medical profile (injuries, conditions) is the one exception to all of this: it stays local-only and is never uploaded, even with an account, unless you explicitly turn on "Share with my coach" in Profile. Turning it on shares it only with a coach whose team you\'re actively on; turning it back off deletes it from the cloud immediately, revoking that access.',
-      'If you add a friend, what they can see is much narrower than a coach: only your logged results and basic profile (email, gender) — never your training-plan settings, history, stroke-count log, or medical profile. Either side can remove the friendship at any time.',
+      "If you add a friend, what they can see is narrower than a coach: your logged results, basic profile (email, gender), and your training-plan settings (level, goal, schedule, equipment) so they can preview what your weekly plan looks like — but never your completed-session history, logged feedback, stroke-count log, or medical profile. Either side can remove the friendship at any time.",
       "You can see everything stored locally via the app's own Profile screen, copy it out (Backup & restore), or delete it at any time by clearing the app's storage or uninstalling the app. If you have an account, you can delete your cloud data from the Account section below; deleting the login itself currently requires contacting the developer.",
     ],
   },

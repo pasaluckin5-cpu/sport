@@ -537,15 +537,27 @@ its SQL editor. Nothing here is wired to a real project by default: `src/supabas
   does *not* delete the Supabase Auth login itself (email/password) — that needs a service-role
   operation this pure-client app deliberately doesn't have; the Privacy Policy is explicit that
   this currently requires contacting the developer.
-- **Friends** (`supabase/migrations/0002_friends.sql`, `src/supabase/friends.ts`,
-  `src/components/friends-panel.tsx`): a separate, symmetric relationship from coach/team — an
-  athlete sends a friend request by email (`add_friend_by_email` RPC), either side can accept
-  a pending request, and the grant is deliberately much narrower than a coach's: friends can see
-  each other's logged `results` and basic `profiles` row (email + gender, needed to compute a
-  ЕВСК rank), never the training-plan data (`athlete_profiles`/`completions`/`stroke_log`) a
-  linked coach can see. `src/i18n/format.ts`'s `friendResultProgressText` reuses the same
-  world-record/ЕВСК-rank comparison the individual "Records & goals" section uses, so a friend's
-  logged result shows the same kind of "next goal" line.
+- **Friends** (`supabase/migrations/0002_friends.sql`, `0005_friends_plan_visibility.sql`,
+  `src/supabase/friends.ts`, `src/components/friends-panel.tsx`): a separate, symmetric
+  relationship from coach/team — an athlete sends a friend request by email (`add_friend_by_email`
+  RPC), either side can accept a pending request, and the grant is still narrower than a coach's:
+  friends can see each other's logged `results`, basic `profiles` row (email + gender, needed to
+  compute a ЕВСК rank), and — since `0005` — `athlete_profiles` (the training-profile settings
+  `generateWeekPlan` is a pure function of), so `FriendsPanel`'s "View plan" toggle can
+  `fetchCloudProfile(friendId)` and run `generateWeekPlan` client-side to preview a friend's
+  current week, rendered read-only via the shared `WeekPlanView` component (`src/components/
+  week-plan-view.tsx` — the same `formatSetStep`/`formatGymBlock` formatters everything else
+  renders sessions with, minus the "mark done"/feedback/share controls, which act on the
+  *viewer's own* completion history and don't apply to someone else's plan). `completions`/
+  `stroke_log` (history, post-session feedback, stroke log) still stay coach-only — a friend sees
+  what the plan looks like, not the athlete's actual training history or how sessions felt.
+  Accepting a friend request is itself the consent step for this, the same way joining a coach's
+  team already implies sharing the training profile with that coach — no extra per-field opt-in
+  the way medical data requires (see "Coach visibility" above), since a plan built from
+  schedule/equipment/goal settings isn't the same sensitivity class as self-declared health data.
+  `src/i18n/format.ts`'s `friendResultProgressText` reuses the same world-record/ЕВСК-rank
+  comparison the individual "Records & goals" section uses, so a friend's logged result shows the
+  same kind of "next goal" line.
 
 **Bluetooth heart rate — implemented but dormant**: `src/bluetooth/` (platform-split
 `ble-engine.native.ts`/`.web.ts` on `react-native-ble-plx`, standard BLE Heart Rate Service),

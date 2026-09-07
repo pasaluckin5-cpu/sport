@@ -5,8 +5,10 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Collapsible } from '@/components/ui/collapsible';
+import { WeekPlanView } from '@/components/week-plan-view';
 import { Spacing } from '@/constants/theme';
-import { RaceStroke } from '@/domain/types';
+import { generateWeekPlan } from '@/domain/planGenerator';
+import { DistanceUnit, RaceStroke, WeekPlan } from '@/domain/types';
 import { useTheme } from '@/hooks/use-theme';
 import { friendResultProgressText } from '@/i18n/format';
 import { useAuth } from '@/state/auth-context';
@@ -21,6 +23,7 @@ import {
   IncomingRequest,
   removeFriendship,
 } from '@/supabase/friends';
+import { fetchCloudProfile } from '@/supabase/sync';
 import { ResultRow } from '@/supabase/types';
 
 export function FriendsPanel() {
@@ -31,6 +34,8 @@ export function FriendsPanel() {
   const [requests, setRequests] = useState<IncomingRequest[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [resultsByFriend, setResultsByFriend] = useState<Record<string, ResultRow[]>>({});
+  // undefined = not fetched yet (collapsed); 'none' = fetched, friend hasn't set up a profile.
+  const [planByFriend, setPlanByFriend] = useState<Record<string, { weekPlan: WeekPlan; unit: DistanceUnit } | 'none' | undefined>>({});
   const [addEmail, setAddEmail] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -79,6 +84,22 @@ export function FriendsPanel() {
   async function handleRemove(otherId: string) {
     await removeFriendship(otherId, session!.user.id);
     refresh(session!.user.id);
+  }
+
+  async function handleTogglePlan(friendId: string) {
+    if (planByFriend[friendId] !== undefined) {
+      setPlanByFriend((prev) => {
+        const next = { ...prev };
+        delete next[friendId];
+        return next;
+      });
+      return;
+    }
+    const friendProfile = await fetchCloudProfile(friendId);
+    setPlanByFriend((prev) => ({
+      ...prev,
+      [friendId]: friendProfile ? { weekPlan: generateWeekPlan(friendProfile), unit: friendProfile.unit } : 'none',
+    }));
   }
 
   return (
@@ -131,40 +152,57 @@ export function FriendsPanel() {
           {t('friends.empty')}
         </ThemedText>
       ) : (
-        friends.map((f) => (
-          <View key={f.id} style={styles.block}>
-            <View style={styles.row}>
-              <ThemedText type="smallBold">{f.email}</ThemedText>
-              <Pressable onPress={() => handleRemove(f.id)} style={({ pressed }) => pressed && styles.pressed}>
-                <ThemedText type="link">{t('friends.remove')}</ThemedText>
-              </Pressable>
-            </View>
-            {(resultsByFriend[f.id] ?? []).length === 0 ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                {t('friends.noResults')}
-              </ThemedText>
-            ) : (
-              (resultsByFriend[f.id] ?? []).map((r) => {
-                const goalLine = f.gender
-                  ? friendResultProgressText(f.gender, r.stroke as RaceStroke, r.distance, r.time_sec, profile?.unit ?? 'meters', t).goal
-                  : null;
-                return (
-                  <View key={r.id} style={styles.nested}>
-                    <ThemedText type="small">
-                      {r.result_date} · {r.distance}m {t(`stroke.${r.stroke}`)} · {Math.floor(r.time_sec / 60)}:
-                      {(r.time_sec % 60).toString().padStart(2, '0')}
-                    </ThemedText>
-                    {goalLine && (
-                      <ThemedText type="small" themeColor="textSecondary">
-                        {goalLine}
+        friends.map((f) => {
+          const friendPlan = planByFriend[f.id];
+          return (
+            <View key={f.id} style={styles.block}>
+              <View style={styles.row}>
+                <ThemedText type="smallBold">{f.email}</ThemedText>
+                <View style={styles.row}>
+                  <Pressable onPress={() => handleTogglePlan(f.id)} style={({ pressed }) => pressed && styles.pressed}>
+                    <ThemedText type="link">{t(friendPlan !== undefined ? 'friends.hidePlan' : 'friends.viewPlan')}</ThemedText>
+                  </Pressable>
+                  <Pressable onPress={() => handleRemove(f.id)} style={({ pressed }) => pressed && styles.pressed}>
+                    <ThemedText type="link">{t('friends.remove')}</ThemedText>
+                  </Pressable>
+                </View>
+              </View>
+              {friendPlan === 'none' ? (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('friends.noPlan')}
+                </ThemedText>
+              ) : friendPlan ? (
+                <View style={styles.nested}>
+                  <WeekPlanView weekPlan={friendPlan.weekPlan} unit={friendPlan.unit} />
+                </View>
+              ) : null}
+              {(resultsByFriend[f.id] ?? []).length === 0 ? (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('friends.noResults')}
+                </ThemedText>
+              ) : (
+                (resultsByFriend[f.id] ?? []).map((r) => {
+                  const goalLine = f.gender
+                    ? friendResultProgressText(f.gender, r.stroke as RaceStroke, r.distance, r.time_sec, profile?.unit ?? 'meters', t).goal
+                    : null;
+                  return (
+                    <View key={r.id} style={styles.nested}>
+                      <ThemedText type="small">
+                        {r.result_date} · {r.distance}m {t(`stroke.${r.stroke}`)} · {Math.floor(r.time_sec / 60)}:
+                        {(r.time_sec % 60).toString().padStart(2, '0')}
                       </ThemedText>
-                    )}
-                  </View>
-                );
-              })
-            )}
-          </View>
-        ))
+                      {goalLine && (
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {goalLine}
+                        </ThemedText>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          );
+        })
       )}
     </Collapsible>
   );
