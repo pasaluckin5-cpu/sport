@@ -100,6 +100,22 @@ function tabIconLearnSvg() {
   </svg>`;
 }
 
+// Dumbbell pictogram for the "Gym" tab's native tab-bar icon — same template-mask convention
+// as tabIconLearnSvg above (renderingMode="template" in app-tabs.tsx, so fill color doesn't
+// matter). A thin center bar with progressively thicker plates toward each end.
+function tabIconGymSvg() {
+  return `
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+    <g stroke="#000000" stroke-linecap="round" fill="none">
+      <line x1="6" y1="12" x2="18" y2="12" stroke-width="2.4" />
+      <line x1="3.5" y1="8" x2="3.5" y2="16" stroke-width="3" />
+      <line x1="20.5" y1="8" x2="20.5" y2="16" stroke-width="3" />
+      <line x1="1.4" y1="9.5" x2="1.4" y2="14.5" stroke-width="2.4" />
+      <line x1="22.6" y1="9.5" x2="22.6" y2="14.5" stroke-width="2.4" />
+    </g>
+  </svg>`;
+}
+
 async function run() {
   fs.mkdirSync(ASSETS_DIR, { recursive: true });
 
@@ -110,6 +126,10 @@ async function run() {
       .resize(size, size)
       .png()
       .toFile(path.join(ASSETS_DIR, 'tabIcons', `learn${suffix}.png`));
+    await sharp(Buffer.from(tabIconGymSvg()))
+      .resize(size, size)
+      .png()
+      .toFile(path.join(ASSETS_DIR, 'tabIcons', `gym${suffix}.png`));
   }
 
   // Main icon (opaque, full bleed) — used for android/web/expo default and as the iOS icon.
