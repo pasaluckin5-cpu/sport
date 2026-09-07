@@ -9,7 +9,17 @@
 -- any real users/data — this is an init migration, not a repeatable up-migration.
 
 drop trigger if exists on_auth_user_created on auth.users;
-drop trigger if exists trg_prevent_role_self_escalation on profiles;
+
+-- `drop trigger if exists ... on profiles` errors with 42P01 ("relation does not exist") on a
+-- truly fresh project where `profiles` was never created yet — IF EXISTS only covers the
+-- trigger, not the table it's attached to. Guard on the table's existence first so this script
+-- works both on a fresh project and as a from-scratch re-run.
+do $$
+begin
+  if to_regclass('public.profiles') is not null then
+    drop trigger if exists trg_prevent_role_self_escalation on profiles;
+  end if;
+end $$;
 
 drop table if exists team_messages cascade;
 drop table if exists messages cascade;
