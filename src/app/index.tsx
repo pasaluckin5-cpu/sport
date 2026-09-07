@@ -122,7 +122,7 @@ function FeedbackPrompt({
   );
 }
 
-function DayCard({ day, weekKey, unit }: { day: DayPlan; weekKey: string; unit: DistanceUnit }) {
+export function DayCard({ day, weekKey, unit }: { day: DayPlan; weekKey: string; unit: DistanceUnit }) {
   const { t } = useTranslation();
   const [shareState, setShareState] = useState<'shared' | 'copied' | null>(null);
   const abbrev = unitAbbrev(unit);

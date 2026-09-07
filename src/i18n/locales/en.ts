@@ -10,7 +10,20 @@ export default {
   tabs: {
     plan: 'Plan',
     learn: 'Learn',
+    gym: 'Gym',
     profile: 'Profile',
+  },
+  gym: {
+    title: 'Gym-only training',
+    intro:
+      "A dedicated setup for training that's purely gym-based — no pool at all. Fill in a few details below and your weekly gym plan will be generated here.",
+    alreadySwimmer:
+      "Your profile currently includes pool training. Filling this in and saving will switch your whole plan to gym-only (pool sessions per week set to 0) — you can always switch back from Profile.",
+    createButton: 'Create my gym plan',
+    switchButton: 'Switch to gym-only',
+    summary: '{{count}} gym session this week',
+    summary_other: '{{count}} gym sessions this week',
+    editHint: 'Adjust split, style, or sessions per week in Profile',
   },
   plan: {
     empty: {
