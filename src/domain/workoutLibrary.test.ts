@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   basePace100Sec,
+  buildGymSession,
   buildStrokeRotation,
+  buildSwimDrylandGymSession,
   estimateDistancePerHour,
   focusEmphasis,
   formatPace100,
+  GYM_SPLIT_ROTATION,
   PACE_M_PER_HOUR,
   roundToPoolLength,
   specialtyFactor,
@@ -100,5 +103,114 @@ describe('strokeFor', () => {
     const rotation = buildStrokeRotation(['butterfly']);
     expect(strokeFor(0, 0, rotation)).toBe(rotation[0]);
     expect(strokeFor(3, 2, rotation)).toBe(rotation[5 % rotation.length]);
+  });
+});
+
+describe('buildSwimDrylandGymSession', () => {
+  it('gives different exercise content across each periodization phase', () => {
+    const base = buildSwimDrylandGymSession('base', 'A', 'intermediate', 45, false, false);
+    const build = buildSwimDrylandGymSession('build', 'A', 'intermediate', 45, false, false);
+    const peak = buildSwimDrylandGymSession('peak', 'A', 'intermediate', 45, false, false);
+    const taper = buildSwimDrylandGymSession('taper', 'A', 'intermediate', 45, false, false);
+    expect(base).not.toEqual(build);
+    expect(build).not.toEqual(peak);
+    expect(peak).not.toEqual(taper);
+  });
+
+  it('falls back to the base phase content when no phase is given', () => {
+    const noPhase = buildSwimDrylandGymSession(undefined, 'B', 'intermediate', 45, false, false);
+    const base = buildSwimDrylandGymSession('base', 'B', 'intermediate', 45, false, false);
+    expect(noPhase).toEqual(base);
+  });
+
+  it('varies content across the A/B/C day letters within the same phase', () => {
+    const a = buildSwimDrylandGymSession('base', 'A', 'intermediate', 45, false, false);
+    const b = buildSwimDrylandGymSession('base', 'B', 'intermediate', 45, false, false);
+    const c = buildSwimDrylandGymSession('base', 'C', 'intermediate', 45, false, false);
+    expect(a).not.toEqual(b);
+    expect(b).not.toEqual(c);
+  });
+
+  it('drops leg-dominant exercises the day before a hard swim, without emptying the session', () => {
+    const normal = buildSwimDrylandGymSession('base', 'A', 'intermediate', 45, false, false);
+    const beforeHardSwim = buildSwimDrylandGymSession('base', 'A', 'intermediate', 45, true, false);
+    const legDominant = ['squats', 'romanianDeadlift', 'bulgarianSplitSquat', 'stepUp', 'hipThrust', 'walkingLunges', 'squatJump', 'calfRaises'];
+    expect(beforeHardSwim.some((b) => legDominant.includes(b.exercise))).toBe(false);
+    expect(beforeHardSwim.length).toBeGreaterThanOrEqual(2);
+    expect(beforeHardSwim.length).toBeLessThan(normal.length);
+  });
+
+  it('drops shoulder-loading exercises when avoiding shoulder load, without emptying the session', () => {
+    const normal = buildSwimDrylandGymSession('base', 'A', 'intermediate', 45, false, false);
+    const avoidShoulder = buildSwimDrylandGymSession('base', 'A', 'intermediate', 45, false, true);
+    const shoulderLoading = ['benchPress', 'shoulderPress', 'pullUps', 'pushUps', 'pushUpPlus', 'tricepsDips', 'medBallRotationalThrow'];
+    expect(avoidShoulder.some((b) => shoulderLoading.includes(b.exercise))).toBe(false);
+    expect(avoidShoulder.length).toBeGreaterThanOrEqual(2);
+    expect(avoidShoulder.length).toBeLessThan(normal.length);
+  });
+
+  it('respects extraExclude (medical exercise avoidance) without emptying the session', () => {
+    const full = buildSwimDrylandGymSession('base', 'C', 'intermediate', 45, false, false);
+    const excluded = buildSwimDrylandGymSession('base', 'C', 'intermediate', 45, false, false, ['stepUp', 'squats']);
+    expect(excluded.some((b) => b.exercise === 'stepUp' || b.exercise === 'squats')).toBe(false);
+    expect(excluded.length).toBeGreaterThanOrEqual(2);
+    expect(excluded.length).toBeLessThan(full.length);
+  });
+
+  it('trims to fewer blocks for a beginner', () => {
+    const beginner = buildSwimDrylandGymSession('base', 'A', 'beginner', 45, false, false);
+    const advanced = buildSwimDrylandGymSession('base', 'A', 'advanced', 45, false, false);
+    expect(beginner.length).toBeLessThanOrEqual(5);
+    expect(beginner.length).toBeLessThanOrEqual(advanced.length);
+  });
+});
+
+describe('GYM_SPLIT_ROTATION', () => {
+  it('has a rotation entry for every GymSplit', () => {
+    const splits: (keyof typeof GYM_SPLIT_ROTATION)[] = [
+      'fullBody',
+      'upperLower',
+      'pushPull',
+      'pushPullLegs',
+      'bodyPartSplit',
+      'broSplit',
+    ];
+    for (const split of splits) {
+      expect(GYM_SPLIT_ROTATION[split].length).toBeGreaterThan(0);
+    }
+  });
+
+  it('broSplit is more granular (more distinct days) than fullBody', () => {
+    expect(GYM_SPLIT_ROTATION.broSplit.length).toBeGreaterThan(GYM_SPLIT_ROTATION.fullBody.length);
+  });
+});
+
+describe('buildGymSession', () => {
+  it('applies a strength scheme (heavier, lower reps) over the focus exercises', () => {
+    const plain = buildGymSession('fullBody', 45, 'intermediate');
+    const strength = buildGymSession('fullBody', 45, 'intermediate', 'strength');
+    expect(strength.every((b) => b.sets === 5 && b.reps === '4-6')).toBe(true);
+    expect(plain.map((b) => b.exercise)).toEqual(strength.map((b) => b.exercise));
+  });
+
+  it('circuit style sets reps to "rounds"', () => {
+    const circuit = buildGymSession('upperBody', 45, 'intermediate', 'circuit');
+    expect(circuit.every((b) => b.reps === 'rounds')).toBe(true);
+  });
+
+  it('cardio style replaces all blocks with a single duration-based cardio session', () => {
+    const cardio = buildGymSession('fullBody', 30, 'intermediate', 'cardio');
+    expect(cardio).toEqual([{ exercise: 'cardioSession', sets: 1, reps: '30 min' }]);
+  });
+
+  it('falls back to fullBody exercises for a focus with no dedicated catalog entry', () => {
+    const mobility = buildGymSession('mobility', 45, 'intermediate');
+    expect(mobility.length).toBeGreaterThan(0);
+  });
+
+  it('excludes medically-avoided exercises without emptying the session', () => {
+    const excluded = buildGymSession('back', 45, 'intermediate', undefined, ['pullUps']);
+    expect(excluded.some((b) => b.exercise === 'pullUps')).toBe(false);
+    expect(excluded.length).toBeGreaterThanOrEqual(2);
   });
 });

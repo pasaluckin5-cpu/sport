@@ -76,10 +76,33 @@ export interface PoolSession {
   equipmentUsed: Equipment[];
 }
 
-export type GymFocus = 'fullBody' | 'upperBody' | 'lowerBody' | 'core' | 'mobility';
+/**
+ * 'chest'/'back'/'shoulders'/'arms'/'push'/'pull' only appear in `'generalFitness'` mode, chosen
+ * via `AthleteProfile.gymSplit` below — swim-dryland sessions are always 'fullBody' (a periodized
+ * A/B/C full-body program — see workoutLibrary.ts's SWIM_SC_PROGRAM — rather than a body-part
+ * split, matching how swimmers are actually programmed in practice).
+ */
+export type GymFocus = 'fullBody' | 'upperBody' | 'lowerBody' | 'core' | 'mobility' | 'chest' | 'back' | 'shoulders' | 'arms' | 'push' | 'pull';
 
 /** Which gym exercise catalog to draw from — see workoutLibrary.ts's two catalogs. */
 export type GymMode = 'swimDryland' | 'generalFitness';
+
+/**
+ * How a `'generalFitness'` gym-only profile's sessions are scheduled across the week — standard
+ * strength-training split terminology. Only meaningful when `poolSessionsPerWeek === 0`; unset
+ * falls back to the existing goal-based rotation. 'bodyPartSplit' pairs muscle groups (e.g.
+ * chest+triceps-adjacent push work) across ~4-5 days; 'broSplit' is the more granular one
+ * muscle-group-per-day version (5-6 days) colloquially known by that name.
+ */
+export type GymSplit = 'fullBody' | 'upperLower' | 'pushPull' | 'pushPullLegs' | 'bodyPartSplit' | 'broSplit';
+
+/**
+ * The set/rep/rest emphasis for a `'generalFitness'` gym-only profile's sessions — independent
+ * of `GymSplit` (which day trains what) and applied on top of it. 'cardio' replaces the day's
+ * strength blocks entirely with a single steady-state cardio block rather than reinterpreting
+ * sets/reps for it. Unset falls back to the existing default (moderate, hypertrophy-ish) scheme.
+ */
+export type GymTrainingStyle = 'strength' | 'hypertrophy' | 'endurance' | 'functional' | 'circuit' | 'cardio';
 
 /**
  * What a swim-dryland exercise is actually *for*, shown to the athlete so the gym work reads
@@ -114,7 +137,14 @@ export type GymExercise =
   | 'bulgarianSplitSquat'
   | 'hipThrust'
   | 'sidePlankReach'
-  | 'hip9090Mobility';
+  | 'hip9090Mobility'
+  | 'shoulderPress'
+  | 'facePulls'
+  | 'stepUp'
+  | 'pallofPress'
+  | 'lateralRaises'
+  | 'bicepCurls'
+  | 'cardioSession';
 
 export interface GymBlock {
   exercise: GymExercise;
@@ -174,6 +204,35 @@ export interface SessionFeedback {
   zone?: Zone;
 }
 
+export type InjurySeverity = 'mild' | 'moderate' | 'severe';
+
+/** A standing injury the athlete has declared — distinct from SessionFeedback.pain (a one-off flag on a single session): this persists across weeks until the athlete removes it. Reuses PainArea since it's the same set of body areas. */
+export interface Injury {
+  area: PainArea;
+  severity: InjurySeverity;
+}
+
+/**
+ * Self-declared, not diagnosed — the app applies only general, conservative caution (see
+ * src/domain/medical.ts), never a personalized medical recommendation. Kept separate from
+ * AthleteProfile (see src/state/medical-context.tsx) since it's a property of the person, not
+ * of any one training program — both the main plan and the learn-to-swim program read it.
+ */
+export interface MedicalProfile {
+  injuries: Injury[];
+  conditions: MedicalCondition[];
+}
+
+export type MedicalCondition =
+  | 'asthma'
+  | 'heartCondition'
+  | 'pregnancy'
+  | 'diabetes'
+  | 'highBloodPressure'
+  | 'epilepsy'
+  | 'recentSurgery'
+  | 'other';
+
 /** Completed-session count for one ISO week — see src/state/history-context.tsx. */
 export interface WeekCompletionCount {
   weekKey: string;
@@ -211,6 +270,10 @@ export interface AthleteProfile {
   gender?: Gender;
   /** Optional goal race date (ISO yyyy-mm-dd). Drives periodization phase/volume — see periodization.ts. */
   goalRaceDate?: string;
+  /** Only meaningful when poolSessionsPerWeek === 0 — see GymSplit's doc comment. */
+  gymSplit?: GymSplit;
+  /** Only meaningful when poolSessionsPerWeek === 0 — see GymTrainingStyle's doc comment. */
+  gymTrainingStyle?: GymTrainingStyle;
 }
 
 export interface WeekPlan {
@@ -292,7 +355,8 @@ export type RaceTacticKey =
   | 'strokeBreaststrokePullout'
   | 'strokeButterflyRhythm'
   | 'strokeBackstrokeCounting'
-  | 'strokeFreestyleBilateral';
+  | 'strokeFreestyleBilateral'
+  | 'medicalCaution';
 
 /** Positive split (going out too fast) is a mistake pattern, not a strategy — never recommended. */
 export type PacingStrategy = 'evenSplit' | 'negativeSplit';

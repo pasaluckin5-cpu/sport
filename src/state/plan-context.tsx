@@ -7,6 +7,7 @@ import { fetchCloudProfile, upsertCloudProfile } from '@/supabase/sync';
 
 import { useAuth } from './auth-context';
 import { useHistory } from './history-context';
+import { useMedical } from './medical-context';
 
 interface PlanContextValue {
   profile: AthleteProfile | null;
@@ -22,6 +23,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const { session } = useAuth();
   const { feedbackHistory, weekCounts } = useHistory();
+  const { medical } = useMedical();
 
   useEffect(() => {
     let cancelled = false;
@@ -61,8 +63,8 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   }, [session?.user.id, isReady]);
 
   const weekPlan = useMemo(
-    () => (profile ? generateWeekPlan(profile, { feedbackHistory, recentWeekCounts: weekCounts }) : null),
-    [profile, feedbackHistory, weekCounts],
+    () => (profile ? generateWeekPlan(profile, { feedbackHistory, recentWeekCounts: weekCounts, medical }) : null),
+    [profile, feedbackHistory, weekCounts, medical],
   );
 
   const value = useMemo<PlanContextValue>(

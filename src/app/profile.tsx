@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChipGroup } from '@/components/chip-group';
 import { CoachDashboard } from '@/components/coach-dashboard';
+import { MedicalSection } from '@/components/medical-section';
 import { Stepper } from '@/components/stepper';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -16,7 +17,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { EQUIPMENT_CATALOG, equipmentLabel } from '@/domain/equipment';
 import { DEFAULT_PROFILE } from '@/domain/planGenerator';
 import { parseProfileBackup } from '@/domain/profileValidation';
-import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, Gender, PoolLength, RaceStroke, TrainingGoal } from '@/domain/types';
+import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, Gender, GymSplit, GymTrainingStyle, PoolLength, RaceStroke, TrainingGoal } from '@/domain/types';
 import { unitAbbrev } from '@/i18n/format';
 import { AppLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
 import { useTheme } from '@/hooks/use-theme';
@@ -29,6 +30,8 @@ const LEVELS: AthleteLevel[] = ['beginner', 'intermediate', 'advanced'];
 const GOALS: TrainingGoal[] = ['fitness', 'endurance', 'speed', 'technique'];
 const UNITS: DistanceUnit[] = ['meters', 'yards'];
 const POOL_LENGTHS: PoolLength[] = [25, 50];
+const GYM_SPLITS: GymSplit[] = ['fullBody', 'upperLower', 'pushPull', 'pushPullLegs', 'bodyPartSplit', 'broSplit'];
+const GYM_STYLES: GymTrainingStyle[] = ['strength', 'hypertrophy', 'endurance', 'functional', 'circuit', 'cardio'];
 const BENCHMARK_DISTANCES = [100, 200, 400, 1000];
 const RACE_STROKES: RaceStroke[] = ['freestyle', 'backstroke', 'breaststroke', 'butterfly', 'im'];
 const GENDERS: Gender[] = ['male', 'female'];
@@ -325,6 +328,10 @@ function ProfileForm() {
             />
           </FormSection>
 
+          <FormSection label={t('profile.section.medical')}>
+            <MedicalSection />
+          </FormSection>
+
           <FormSection label={t('profile.section.level')}>
             <ChipGroup
               options={LEVELS.map((value) => ({ value, label: t(`profile.level.${value}`) }))}
@@ -416,6 +423,33 @@ function ProfileForm() {
               {t(isSwimming ? 'profile.gymHint.swim' : 'profile.gymHint.general')}
             </ThemedText>
           </FormSection>
+
+          {!isSwimming && (
+            <FormSection label={t('profile.section.gymSplit')}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('profile.gymSplit.hint')}
+              </ThemedText>
+              <ChipGroup
+                options={GYM_SPLITS.map((s) => ({ value: s, label: t(`profile.gymSplit.option.${s}`) }))}
+                selected={form.gymSplit ? [form.gymSplit] : []}
+                onToggle={(value) => {
+                  setSaved(false);
+                  setForm((f) => ({ ...f, gymSplit: f.gymSplit === value ? undefined : value }));
+                }}
+              />
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('profile.section.gymTrainingStyle')}
+              </ThemedText>
+              <ChipGroup
+                options={GYM_STYLES.map((s) => ({ value: s, label: t(`profile.gymTrainingStyle.option.${s}`) }))}
+                selected={form.gymTrainingStyle ? [form.gymTrainingStyle] : []}
+                onToggle={(value) => {
+                  setSaved(false);
+                  setForm((f) => ({ ...f, gymTrainingStyle: f.gymTrainingStyle === value ? undefined : value }));
+                }}
+              />
+            </FormSection>
+          )}
 
           {isSwimming && (
             <FormSection label={t('profile.section.equipment')}>

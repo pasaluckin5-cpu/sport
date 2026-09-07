@@ -32,7 +32,7 @@ describe('computeTotalDays', () => {
 
   it('is monotonically non-increasing as minutesPerDay increases', () => {
     const minutesOptions = [5, 10, 15, 20, 25, 30, 40, 50, 60, 90];
-    const totals = minutesOptions.map(computeTotalDays);
+    const totals = minutesOptions.map((m) => computeTotalDays(m));
     for (let i = 1; i < totals.length; i++) {
       expect(totals[i]).toBeLessThanOrEqual(totals[i - 1]);
     }

@@ -5,9 +5,11 @@ import {
   GymBlock,
   GymExercise,
   GymFocus,
-  GymMode,
+  GymSplit,
+  GymTrainingStyle,
   PaceBenchmark,
   PacingStrategy,
+  PeriodizationPhase,
   PoolLength,
   RaceStroke,
   RaceSplit,
@@ -338,9 +340,11 @@ export function buildMainSet(
 
 /**
  * Standard, general-purpose gym/fitness split — used for an athlete with zero pool sessions
- * (`GymMode: 'generalFitness'`). No swim connection implied.
+ * (`GymMode: 'generalFitness'`). No swim connection implied. `Partial` (not every GymFocus is
+ * meaningful in this mode — see buildGymSession's fallback) rather than a full `Record` so this
+ * catalog only needs to define the focuses `generalFitness` actually uses.
  */
-const GENERAL_FITNESS_EXERCISES: Record<GymFocus, GymBlock[]> = {
+const GENERAL_FITNESS_EXERCISES: Partial<Record<GymFocus, GymBlock[]>> = {
   fullBody: [
     { exercise: 'squats', sets: 3, reps: '10-12' },
     { exercise: 'pushUps', sets: 3, reps: 'max' },
@@ -371,48 +375,239 @@ const GENERAL_FITNESS_EXERCISES: Record<GymFocus, GymBlock[]> = {
     { exercise: 'thoracicRotations', sets: 2, reps: '10' },
     { exercise: 'ankleMobility', sets: 2, reps: '10' },
   ],
+  chest: [
+    { exercise: 'benchPress', sets: 4, reps: '8-12' },
+    { exercise: 'pushUps', sets: 3, reps: 'max' },
+    { exercise: 'tricepsDips', sets: 3, reps: '10-12' },
+  ],
+  back: [
+    { exercise: 'pullUps', sets: 4, reps: '6-10' },
+    { exercise: 'bentOverRows', sets: 4, reps: '8-12' },
+    { exercise: 'facePulls', sets: 3, reps: '12-15' },
+  ],
+  shoulders: [
+    { exercise: 'shoulderPress', sets: 4, reps: '8-12' },
+    { exercise: 'lateralRaises', sets: 3, reps: '12-15' },
+    { exercise: 'shoulderExternalRotation', sets: 2, reps: '15' },
+  ],
+  arms: [
+    { exercise: 'bicepCurls', sets: 3, reps: '10-12' },
+    { exercise: 'tricepsDips', sets: 3, reps: '10-12' },
+  ],
+  push: [
+    { exercise: 'benchPress', sets: 4, reps: '8-12' },
+    { exercise: 'shoulderPress', sets: 3, reps: '8-12' },
+    { exercise: 'tricepsDips', sets: 3, reps: '10-12' },
+  ],
+  pull: [
+    { exercise: 'pullUps', sets: 4, reps: '6-10' },
+    { exercise: 'bentOverRows', sets: 3, reps: '8-12' },
+    { exercise: 'bicepCurls', sets: 3, reps: '10-12' },
+  ],
 };
 
 /**
- * Swim-specific dryland work — used whenever the athlete has at least one pool session/week
- * (`GymMode: 'swimDryland'`). Every exercise is chosen for a specific in-water payoff (tagged
- * via `benefit`) rather than generic strength: rotator-cuff/scapular work for shoulder-injury
- * prevention, pulling strength for the catch/pull phase, explosive hip extension for starts and
- * turns, ankle/hip mobility for kick range of motion, and rotational core control for the
- * streamline position and body roll.
+ * Which body-part focus (or focuses) train on each day of a `GymSplit`, cycled by the gym
+ * session's position in the week (day 1 of the split, day 2, ...), independent of which weekday
+ * it lands on. 'bodyPartSplit' pairs muscle groups across 4 days; 'broSplit' is the more
+ * granular one-muscle-group-per-day version across 6.
  */
-const SWIM_DRYLAND_EXERCISES: Record<GymFocus, GymBlock[]> = {
-  fullBody: [
-    { exercise: 'medBallRotationalThrow', sets: 3, reps: '12', benefit: 'corePower' },
-    { exercise: 'pullUps', sets: 3, reps: '6-10', benefit: 'pullStrength' },
-    { exercise: 'squatJump', sets: 3, reps: '8-10', benefit: 'explosiveStart' },
-    { exercise: 'hollowHold', sets: 3, reps: '20-30s', benefit: 'corePower' },
-  ],
-  upperBody: [
-    { exercise: 'pullUps', sets: 4, reps: '6-10', benefit: 'pullStrength' },
-    { exercise: 'shoulderExternalRotation', sets: 3, reps: '15', benefit: 'shoulderHealth' },
-    { exercise: 'yTWRaises', sets: 3, reps: '10', benefit: 'shoulderHealth' },
-    { exercise: 'pushUpPlus', sets: 3, reps: '10-12', benefit: 'shoulderHealth' },
-  ],
-  lowerBody: [
-    { exercise: 'squatJump', sets: 3, reps: '8-10', benefit: 'explosiveStart' },
-    { exercise: 'bulgarianSplitSquat', sets: 3, reps: '10', benefit: 'kickPower' },
-    { exercise: 'calfRaises', sets: 3, reps: '15', benefit: 'kickPower' },
-    { exercise: 'romanianDeadlift', sets: 3, reps: '10', benefit: 'kickPower' },
-  ],
-  core: [
-    { exercise: 'hollowHold', sets: 3, reps: '20-30s', benefit: 'corePower' },
-    { exercise: 'sidePlankReach', sets: 3, reps: '10', benefit: 'corePower' },
-    { exercise: 'deadBug', sets: 3, reps: '12', benefit: 'corePower' },
-    { exercise: 'russianTwists', sets: 3, reps: '20', benefit: 'corePower' },
-  ],
-  mobility: [
-    { exercise: 'shoulderDislocates', sets: 2, reps: '10', benefit: 'shoulderHealth' },
-    { exercise: 'thoracicRotations', sets: 2, reps: '10', benefit: 'mobility' },
-    { exercise: 'ankleMobility', sets: 2, reps: '10', benefit: 'kickPower' },
-    { exercise: 'hip9090Mobility', sets: 2, reps: '8', benefit: 'mobility' },
-  ],
+export const GYM_SPLIT_ROTATION: Record<GymSplit, GymFocus[]> = {
+  fullBody: ['fullBody'],
+  upperLower: ['upperBody', 'lowerBody'],
+  pushPull: ['push', 'pull'],
+  pushPullLegs: ['push', 'pull', 'lowerBody'],
+  bodyPartSplit: ['chest', 'back', 'lowerBody', 'shoulders'],
+  broSplit: ['chest', 'back', 'shoulders', 'lowerBody', 'arms', 'core'],
 };
+
+const STYLE_SCHEME: Partial<Record<GymTrainingStyle, { sets: number; reps: string }>> = {
+  strength: { sets: 5, reps: '4-6' },
+  hypertrophy: { sets: 4, reps: '8-12' },
+  endurance: { sets: 3, reps: '15-20' },
+  functional: { sets: 3, reps: '10-12' },
+};
+
+/**
+ * A_LETTERS-keyed periodized swim strength & conditioning program: three rotating full-body
+ * sessions (A/B/C — matching how swimmers are actually programmed, not a bodybuilding body-part
+ * split) whose exercise selection and set/rep scheme both shift with the athlete's periodization
+ * phase toward their goal race (src/domain/periodization.ts) — base (general prep, moderate
+ * reps, leave 2-3 reps in reserve) -> build (rising load, lower reps) -> peak (adds an explosive
+ * jump/med-ball primer before the lifts, lower reps still) -> taper (volume cut, stays
+ * explosive but far from failure, matching the pool taper's own volume cut). Falls back to the
+ * 'base' scheme when there's no goal race date (see buildSwimDrylandGymSession) — a sensible
+ * year-round default rather than requiring a race date to get sound programming.
+ */
+const SWIM_SC_PROGRAM: Record<PeriodizationPhase, Record<'A' | 'B' | 'C', GymBlock[]>> = {
+  base: {
+    A: [
+      { exercise: 'squats', sets: 3, reps: '8', benefit: 'kickPower' },
+      { exercise: 'romanianDeadlift', sets: 3, reps: '8', benefit: 'kickPower' },
+      { exercise: 'benchPress', sets: 3, reps: '8', benefit: 'pullStrength' },
+      { exercise: 'bentOverRows', sets: 3, reps: '10', benefit: 'pullStrength' },
+      { exercise: 'bulgarianSplitSquat', sets: 2, reps: '8', benefit: 'kickPower' },
+      { exercise: 'plank', sets: 3, reps: '30-40s', benefit: 'corePower' },
+      { exercise: 'shoulderExternalRotation', sets: 2, reps: '12-15', benefit: 'shoulderHealth' },
+    ],
+    B: [
+      { exercise: 'walkingLunges', sets: 3, reps: '8', benefit: 'kickPower' },
+      { exercise: 'hipThrust', sets: 3, reps: '10', benefit: 'kickPower' },
+      { exercise: 'pullUps', sets: 3, reps: '8-10', benefit: 'pullStrength' },
+      { exercise: 'shoulderPress', sets: 2, reps: '8-10', benefit: 'shoulderHealth' },
+      { exercise: 'bentOverRows', sets: 3, reps: '10', benefit: 'pullStrength' },
+      { exercise: 'deadBug', sets: 3, reps: '8', benefit: 'corePower' },
+      { exercise: 'facePulls', sets: 2, reps: '12-15', benefit: 'shoulderHealth' },
+    ],
+    C: [
+      { exercise: 'squats', sets: 3, reps: '8', benefit: 'kickPower' },
+      { exercise: 'romanianDeadlift', sets: 2, reps: '8', benefit: 'kickPower' },
+      { exercise: 'pushUps', sets: 3, reps: '8-12', benefit: 'shoulderHealth' },
+      { exercise: 'pullUps', sets: 3, reps: '8-10', benefit: 'pullStrength' },
+      { exercise: 'stepUp', sets: 2, reps: '8', benefit: 'kickPower' },
+      { exercise: 'pallofPress', sets: 3, reps: '10', benefit: 'corePower' },
+      { exercise: 'shoulderExternalRotation', sets: 2, reps: '15', benefit: 'shoulderHealth' },
+    ],
+  },
+  build: {
+    A: [
+      { exercise: 'squats', sets: 3, reps: '6-8', benefit: 'kickPower' },
+      { exercise: 'romanianDeadlift', sets: 3, reps: '6-8', benefit: 'kickPower' },
+      { exercise: 'benchPress', sets: 3, reps: '6-8', benefit: 'pullStrength' },
+      { exercise: 'bentOverRows', sets: 3, reps: '8', benefit: 'pullStrength' },
+      { exercise: 'bulgarianSplitSquat', sets: 2, reps: '8', benefit: 'kickPower' },
+      { exercise: 'hollowHold', sets: 3, reps: '20-30s', benefit: 'corePower' },
+    ],
+    B: [
+      { exercise: 'romanianDeadlift', sets: 3, reps: '5-6', benefit: 'kickPower' },
+      { exercise: 'pullUps', sets: 3, reps: '6-8', benefit: 'pullStrength' },
+      { exercise: 'shoulderPress', sets: 3, reps: '8', benefit: 'shoulderHealth' },
+      { exercise: 'walkingLunges', sets: 2, reps: '8', benefit: 'kickPower' },
+      { exercise: 'bentOverRows', sets: 3, reps: '8', benefit: 'pullStrength' },
+      { exercise: 'russianTwists', sets: 3, reps: '20', benefit: 'corePower' },
+    ],
+    C: [
+      { exercise: 'squats', sets: 3, reps: '6', benefit: 'kickPower' },
+      { exercise: 'stepUp', sets: 3, reps: '8', benefit: 'kickPower' },
+      { exercise: 'benchPress', sets: 3, reps: '8', benefit: 'pullStrength' },
+      { exercise: 'pullUps', sets: 3, reps: '6-8', benefit: 'pullStrength' },
+      { exercise: 'hipThrust', sets: 2, reps: '8-10', benefit: 'kickPower' },
+      { exercise: 'facePulls', sets: 2, reps: '12-15', benefit: 'shoulderHealth' },
+    ],
+  },
+  peak: {
+    A: [
+      { exercise: 'squatJump', sets: 3, reps: '3', benefit: 'explosiveStart' },
+      { exercise: 'medBallRotationalThrow', sets: 3, reps: '4', benefit: 'corePower' },
+      { exercise: 'squats', sets: 3, reps: '5', benefit: 'kickPower' },
+      { exercise: 'romanianDeadlift', sets: 3, reps: '6', benefit: 'kickPower' },
+      { exercise: 'benchPress', sets: 3, reps: '6', benefit: 'pullStrength' },
+      { exercise: 'bentOverRows', sets: 3, reps: '8', benefit: 'pullStrength' },
+      { exercise: 'hollowHold', sets: 3, reps: '20-30s', benefit: 'corePower' },
+    ],
+    B: [
+      { exercise: 'squatJump', sets: 3, reps: '3', benefit: 'explosiveStart' },
+      { exercise: 'bulgarianSplitSquat', sets: 3, reps: '6', benefit: 'kickPower' },
+      { exercise: 'pullUps', sets: 3, reps: '6', benefit: 'pullStrength' },
+      { exercise: 'shoulderPress', sets: 3, reps: '6-8', benefit: 'shoulderHealth' },
+      { exercise: 'bentOverRows', sets: 3, reps: '8', benefit: 'pullStrength' },
+      { exercise: 'shoulderExternalRotation', sets: 2, reps: '15', benefit: 'shoulderHealth' },
+    ],
+    C: [
+      { exercise: 'squatJump', sets: 3, reps: '3', benefit: 'explosiveStart' },
+      { exercise: 'romanianDeadlift', sets: 3, reps: '5', benefit: 'kickPower' },
+      { exercise: 'stepUp', sets: 2, reps: '6', benefit: 'kickPower' },
+      { exercise: 'pullUps', sets: 3, reps: '6-8', benefit: 'pullStrength' },
+      { exercise: 'benchPress', sets: 2, reps: '8', benefit: 'pullStrength' },
+      { exercise: 'deadBug', sets: 3, reps: '8', benefit: 'corePower' },
+    ],
+  },
+  taper: {
+    A: [
+      { exercise: 'squatJump', sets: 3, reps: '3', benefit: 'explosiveStart' },
+      { exercise: 'squats', sets: 2, reps: '4-5', benefit: 'kickPower' },
+      { exercise: 'pullUps', sets: 2, reps: '5-6', benefit: 'pullStrength' },
+      { exercise: 'benchPress', sets: 2, reps: '5-6', benefit: 'pullStrength' },
+      { exercise: 'romanianDeadlift', sets: 2, reps: '6', benefit: 'kickPower' },
+      { exercise: 'hollowHold', sets: 2, reps: '20s', benefit: 'corePower' },
+    ],
+    B: [
+      { exercise: 'squatJump', sets: 3, reps: '3', benefit: 'explosiveStart' },
+      { exercise: 'medBallRotationalThrow', sets: 3, reps: '4', benefit: 'corePower' },
+      { exercise: 'bulgarianSplitSquat', sets: 2, reps: '6', benefit: 'kickPower' },
+      { exercise: 'bentOverRows', sets: 2, reps: '6', benefit: 'pullStrength' },
+      { exercise: 'shoulderPress', sets: 2, reps: '6', benefit: 'shoulderHealth' },
+      { exercise: 'shoulderExternalRotation', sets: 2, reps: '15', benefit: 'shoulderHealth' },
+    ],
+    C: [
+      { exercise: 'squatJump', sets: 2, reps: '3', benefit: 'explosiveStart' },
+      { exercise: 'medBallRotationalThrow', sets: 2, reps: '4', benefit: 'corePower' },
+      { exercise: 'squats', sets: 2, reps: '6', benefit: 'kickPower' },
+      { exercise: 'bentOverRows', sets: 2, reps: '6', benefit: 'pullStrength' },
+      { exercise: 'pushUps', sets: 2, reps: '8', benefit: 'shoulderHealth' },
+      { exercise: 'deadBug', sets: 2, reps: '8', benefit: 'corePower' },
+    ],
+  },
+};
+
+const LEG_DOMINANT_EXERCISES: GymExercise[] = [
+  'squats',
+  'romanianDeadlift',
+  'bulgarianSplitSquat',
+  'stepUp',
+  'hipThrust',
+  'walkingLunges',
+  'squatJump',
+  'calfRaises',
+];
+
+const SHOULDER_LOADING_EXERCISES: GymExercise[] = [
+  'benchPress',
+  'shoulderPress',
+  'pullUps',
+  'pushUps',
+  'pushUpPlus',
+  'tricepsDips',
+  'medBallRotationalThrow',
+];
+
+/** Drops blocks whose exercise is in `exclude`, unless that would leave fewer than 2 blocks — a session cut down to nothing isn't a safer session, just a missing one. */
+function filterGymBlocks(blocks: GymBlock[], exclude: GymExercise[]): GymBlock[] {
+  if (exclude.length === 0) return blocks;
+  const filtered = blocks.filter((b) => !exclude.includes(b.exercise));
+  return filtered.length >= 2 ? filtered : blocks;
+}
+
+/**
+ * One of the three rotating swim S&C days (see SWIM_SC_PROGRAM), safety-filtered and
+ * level-adjusted. `followedByHardSwim` drops leg-dominant exercises (same "don't pre-fatigue the
+ * legs before a hard kick/sprint swim" reasoning already applied to the old focus-based
+ * rotation); `avoidShoulder` drops heavy pressing/pulling for recent shoulder-pain feedback or a
+ * standing shoulder injury; `extraExclude` folds in any other self-declared injury's exercise
+ * exclusions (src/domain/medical.ts's exercisesToAvoidForMedical).
+ */
+export function buildSwimDrylandGymSession(
+  phase: PeriodizationPhase | undefined,
+  dayLetter: 'A' | 'B' | 'C',
+  level: AthleteLevel,
+  durationMin: number,
+  followedByHardSwim: boolean,
+  avoidShoulder: boolean,
+  extraExclude: GymExercise[] = [],
+): GymBlock[] {
+  const base = SWIM_SC_PROGRAM[phase ?? 'base'][dayLetter];
+  const exclude = [
+    ...(followedByHardSwim ? LEG_DOMINANT_EXERCISES : []),
+    ...(avoidShoulder ? SHOULDER_LOADING_EXERCISES : []),
+    ...extraExclude,
+  ];
+  let blocks = filterGymBlocks(base, exclude);
+  if (level === 'beginner') blocks = blocks.slice(0, 5);
+  if (level === 'advanced' && durationMin >= 60) {
+    blocks = [...blocks, { exercise: 'conditioningFinisher', sets: 3, reps: 'rounds' }];
+  }
+  return blocks;
+}
 
 /**
  * A pre-race warmup — deliberately different from a practice warmup (buildWarmup above): it's
@@ -527,12 +722,38 @@ export function raceTacticalNotes(raceDistance: number, stroke: RaceStroke): Rac
   return notes;
 }
 
-export function buildGymSession(focus: GymFocus, durationMin: number, level: AthleteLevel, mode: GymMode): GymBlock[] {
-  const catalog = mode === 'swimDryland' ? SWIM_DRYLAND_EXERCISES : GENERAL_FITNESS_EXERCISES;
-  const base = catalog[focus];
-  if (level === 'beginner') return base.slice(0, 3);
-  if (level === 'advanced' && durationMin >= 60) {
-    return [...base, { exercise: 'conditioningFinisher' as GymExercise, sets: 3, reps: 'rounds' }];
+/**
+ * Builds a `'generalFitness'` gym session (an athlete with zero pool sessions/week — see
+ * buildSwimDrylandGymSession for the swim-dryland equivalent). `style` applies a set/rep scheme
+ * on top of whatever exercises `focus` selects (or, for `'cardio'`, replaces them entirely with
+ * a single steady-state cardio block — a duration-based activity doesn't fit the sets/reps
+ * shape at all) — see GymTrainingStyle's doc comment. `medicalExclude` folds in any self-declared
+ * injury's exercise exclusions (src/domain/medical.ts's exercisesToAvoidForMedical).
+ */
+export function buildGymSession(
+  focus: GymFocus,
+  durationMin: number,
+  level: AthleteLevel,
+  style?: GymTrainingStyle,
+  medicalExclude: GymExercise[] = [],
+): GymBlock[] {
+  if (style === 'cardio') {
+    return [{ exercise: 'cardioSession', sets: 1, reps: `${durationMin} min` }];
   }
-  return base;
+
+  const base = GENERAL_FITNESS_EXERCISES[focus] ?? GENERAL_FITNESS_EXERCISES.fullBody!;
+  let blocks = filterGymBlocks(base, medicalExclude);
+  if (level === 'beginner') blocks = blocks.slice(0, 3);
+  if (level === 'advanced' && durationMin >= 60 && !style) {
+    blocks = [...blocks, { exercise: 'conditioningFinisher', sets: 3, reps: 'rounds' }];
+  }
+
+  if (style === 'circuit') {
+    return blocks.map((b) => ({ ...b, sets: 3, reps: 'rounds' }));
+  }
+  const scheme = style ? STYLE_SCHEME[style] : undefined;
+  if (scheme) {
+    return blocks.map((b) => ({ ...b, sets: scheme.sets, reps: scheme.reps }));
+  }
+  return blocks;
 }

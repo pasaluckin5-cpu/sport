@@ -15,6 +15,7 @@ import { Collapsible } from '@/components/ui/collapsible';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { equipmentLabel } from '@/domain/equipment';
+import { hasAnyMedicalCaution } from '@/domain/medical';
 import { daysUntilRace } from '@/domain/periodization';
 import { buildRaceDayPlan } from '@/domain/raceDayPlan';
 import { AthleteProfile, DAY_KEYS, DayPlan, Difficulty, DistanceUnit, PainArea, Zone } from '@/domain/types';
@@ -32,6 +33,7 @@ import {
 } from '@/i18n/format';
 import { useTheme } from '@/hooks/use-theme';
 import { SessionKind, useHistory } from '@/state/history-context';
+import { useMedical } from '@/state/medical-context';
 import { usePlan } from '@/state/plan-context';
 import { useStrokeLog } from '@/state/strokeLog-context';
 import { shareOrCopy } from '@/utils/share';
@@ -196,7 +198,8 @@ function DayCard({ day, weekKey, unit }: { day: DayPlan; weekKey: string; unit: 
 
 function RaceDaySection({ profile }: { profile: AthleteProfile }) {
   const { t } = useTranslation();
-  const plan = buildRaceDayPlan(profile);
+  const { medical } = useMedical();
+  const plan = buildRaceDayPlan(profile, medical);
   if (!plan) return null;
 
   return (
@@ -341,6 +344,7 @@ function ProgressSection({ profile }: { profile: AthleteProfile }) {
 export default function HomeScreen() {
   const { t } = useTranslation();
   const { profile, weekPlan, isReady } = usePlan();
+  const { medical } = useMedical();
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
   const insets = {
@@ -425,6 +429,11 @@ export default function HomeScreen() {
           {periodizationNote && (
             <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
               {periodizationNote}
+            </ThemedText>
+          )}
+          {hasAnyMedicalCaution(medical) && (
+            <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+              {t('medical.planCaution')}
             </ThemedText>
           )}
           <Pressable onPress={() => router.navigate('/profile')} style={({ pressed }) => pressed && styles.pressed}>

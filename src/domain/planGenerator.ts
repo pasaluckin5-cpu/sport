@@ -1,4 +1,12 @@
 import {
+  capZoneIntensity,
+  exercisesToAvoidForMedical,
+  hasShoulderInjury,
+  medicalVolumeMultiplier,
+  medicalZoneCap,
+  strokesToAvoid,
+} from './medical';
+import {
   adherenceRatio,
   adherenceVolumeMultiplier,
   avoidShoulderLoad,
@@ -10,14 +18,16 @@ import {
   summarizeFeedback,
   volumeMultiplier,
 } from './periodization';
-import { AthleteProfile, DayPlan, GymFocus, GymMode, PoolSession, SessionFeedback, TrainingGoal, WeekCompletionCount, WeekPlan, Zone } from './types';
+import { AthleteProfile, DayPlan, GymFocus, GymMode, MedicalProfile, PoolSession, RaceStroke, SessionFeedback, TrainingGoal, WeekCompletionCount, WeekPlan, Zone } from './types';
 import {
   basePace100Sec,
   buildCooldown,
   buildGymSession,
   buildMainSet,
   buildStrokeRotation,
+  buildSwimDrylandGymSession,
   buildWarmup,
+  GYM_SPLIT_ROTATION,
   roundToPoolLength,
   sessionVolume,
   specialtyFactor,
@@ -85,14 +95,24 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+interface PoolSessionAdjustments {
+  volumeMult: number;
+  /** Recent shoulder-pain feedback and/or a standing shoulder injury both funnel into this one flag. */
+  avoidShoulder: boolean;
+  /** Standing injuries only (see src/domain/medical.ts) — a self-declared, persistent condition, not a one-off feedback flag. */
+  avoidedStrokes: RaceStroke[];
+  medicalZoneCap: Zone | undefined;
+}
+
 function assemblePoolSession(
   zone: Zone,
   profile: AthleteProfile,
   sessionIndex: number,
   weekOffset: number,
-  volumeMult: number,
-  avoidShoulder: boolean,
+  adjustments: PoolSessionAdjustments,
 ): PoolSession {
+  const { volumeMult, avoidShoulder, avoidedStrokes, medicalZoneCap: zoneCap } = adjustments;
+  const cappedZone = capZoneIntensity(zone, zoneCap);
   const { level, poolSessionDurationMin: durationMin, unit, poolLength, benchmark, primaryStrokes, primaryDistances } = profile;
   // Skip paddles (extra shoulder loading) for the week when recent feedback flagged shoulder
   // pain — same "downgrade, don't drop the day" pattern already used for a hard-swim-eve leg day.
@@ -106,11 +126,15 @@ function assemblePoolSession(
   // weekdays for a given session count are often all the same parity (e.g. 3/week = Mon/Wed/Fri,
   // all even), which would otherwise systematically collide with a period-2 stroke rotation and
   // could hide the athlete's primary stroke from an entire low-frequency week.
-  const stroke = strokeFor(sessionIndex, weekOffset, buildStrokeRotation(primaryStrokes));
+  let stroke = strokeFor(sessionIndex, weekOffset, buildStrokeRotation(primaryStrokes));
+  // A standing injury can make the athlete's own chosen primary stroke inadvisable this week
+  // (e.g. breaststroke's whip kick with a knee injury) — fall back to freestyle rather than
+  // silently dropping the stroke rotation's variety for every other session too.
+  if (avoidedStrokes.some((s) => s === stroke)) stroke = 'freestyle';
   const specialty = specialtyFactor(primaryDistances);
   const pace100Sec = benchmark ? basePace100Sec(benchmark) : undefined;
   const warmup = buildWarmup(warmupDistance, equipment, stroke, poolLength);
-  const main = buildMainSet(zone, mainDistance, equipment, level, stroke, poolLength, specialty, pace100Sec);
+  const main = buildMainSet(cappedZone, mainDistance, equipment, level, stroke, poolLength, specialty, pace100Sec);
   const cooldown = buildCooldown(cooldownDistance);
 
   const allSteps = [...warmup, ...main, ...cooldown];
@@ -118,7 +142,7 @@ function assemblePoolSession(
   const equipmentUsed = Array.from(new Set(allSteps.flatMap((step) => step.equipment)));
 
   return {
-    zone,
+    zone: cappedZone,
     durationMin,
     warmup,
     main,
@@ -149,6 +173,12 @@ export interface GenerateWeekPlanOptions {
    * Empty/absent = no adherence adjustment.
    */
   recentWeekCounts?: WeekCompletionCount[];
+  /**
+   * Self-declared, persistent medical data (see src/domain/medical.ts) — independent of
+   * AthleteProfile (it's a property of the person, not of this training program) so it's passed
+   * in rather than read off `profile`. Empty/absent = no caution applied.
+   */
+  medical?: MedicalProfile;
 }
 
 export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekPlanOptions = {}): WeekPlan {
@@ -160,9 +190,18 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
   const adherence = adherenceRatio(options.recentWeekCounts ?? [], weekKey, expectedSessionsPerWeek);
   const volumeMult = Math.min(
     1.1,
-    Math.max(0.5, volumeMultiplier(phase) * feedbackVolumeMultiplier(feedbackSummary) * adherenceVolumeMultiplier(adherence)),
+    Math.max(
+      0.5,
+      volumeMultiplier(phase) *
+        feedbackVolumeMultiplier(feedbackSummary) *
+        adherenceVolumeMultiplier(adherence) *
+        medicalVolumeMultiplier(options.medical),
+    ),
   );
-  const avoidShoulder = avoidShoulderLoad(feedbackSummary);
+  const avoidShoulder = avoidShoulderLoad(feedbackSummary) || hasShoulderInjury(options.medical);
+  const avoidedStrokes = strokesToAvoid(options.medical);
+  const medicalExcludeExercises = exercisesToAvoidForMedical(options.medical);
+  const zoneCap = medicalZoneCap(options.medical);
   const overloaded = overloadedZones(options.feedbackHistory);
 
   const poolCount = clamp(profile.poolSessionsPerWeek, 0, 7);
@@ -179,8 +218,9 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
 
   const days: DayPlan[] = Array.from({ length: 7 }, (_, dayIndex) => ({ dayIndex }));
 
+  const poolAdjustments: PoolSessionAdjustments = { volumeMult, avoidShoulder, avoidedStrokes, medicalZoneCap: zoneCap };
   poolDays.forEach((dayIndex, i) => {
-    days[dayIndex].pool = assemblePoolSession(zones[i], profile, i, strokeOffset, volumeMult, avoidShoulder);
+    days[dayIndex].pool = assemblePoolSession(zones[i], profile, i, strokeOffset, poolAdjustments);
   });
 
   const gymCount = clamp(profile.gymSessionsPerWeek, 0, 7);
@@ -200,19 +240,54 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
   // consistently shape the gym split every week, not just some weeks — weekly variety already
   // comes from the swim side (and from which exact days gym lands on as gymCount changes).
   const gymFocusRotation = GYM_FOCUS_ROTATION_BY_GOAL[profile.goal];
+  // Only meaningful in generalFitness mode (poolCount === 0) — see GymSplit's doc comment.
+  const splitRotation = profile.gymSplit ? GYM_SPLIT_ROTATION[profile.gymSplit] : undefined;
   const gymDuration = roundGymDuration(DEFAULT_GYM_DURATION_MIN * volumeMult);
+  const SPLIT_DAY_LETTERS = ['A', 'B', 'C'] as const;
+
   for (let i = 0; i < gymCount && i < gymDayCandidates.length; i++) {
     const dayIndex = gymDayCandidates[i];
     const nextDayPool = days[(dayIndex + 1) % 7].pool;
     const followedByHardSwim = !!nextDayPool && HARD_ZONES.includes(nextDayPool.zone);
 
-    let focus = gymFocusRotation[i % gymFocusRotation.length];
-    if (followedByHardSwim && focus === 'lowerBody') {
-      // Avoid pre-fatiguing the legs the day before a hard kick/sprint-heavy swim.
-      focus = 'core';
+    if (gymMode === 'swimDryland') {
+      // A periodized, rotating full-body A/B/C program (see workoutLibrary.ts's
+      // SWIM_SC_PROGRAM) rather than a body-part split — this is how swimmers are actually
+      // programmed, and it ties gym progression to the same race periodization as the pool
+      // side (base/build/peak/taper).
+      const dayLetter = SPLIT_DAY_LETTERS[i % 3];
+      days[dayIndex].gym = {
+        durationMin: gymDuration,
+        focus: 'fullBody',
+        mode: gymMode,
+        blocks: buildSwimDrylandGymSession(
+          phase,
+          dayLetter,
+          profile.level,
+          gymDuration,
+          followedByHardSwim,
+          avoidShoulder,
+          medicalExcludeExercises,
+        ),
+      };
+      continue;
     }
-    if (avoidShoulder && focus === 'upperBody') {
-      // Recent shoulder pain flagged — swap heavy pulling/pressing work for mobility this week.
+
+    let focus: GymFocus;
+    if (splitRotation) {
+      // The athlete explicitly chose a split (Profile → gym-only settings) — follow it exactly
+      // rather than the default goal-based rotation.
+      focus = splitRotation[i % splitRotation.length];
+    } else {
+      focus = gymFocusRotation[i % gymFocusRotation.length];
+      if (followedByHardSwim && focus === 'lowerBody') {
+        // Avoid pre-fatiguing the legs the day before a hard kick/sprint-heavy swim.
+        focus = 'core';
+      }
+    }
+    if (avoidShoulder && (focus === 'upperBody' || focus === 'chest' || focus === 'shoulders' || focus === 'push')) {
+      // Recent shoulder pain (or a standing shoulder injury) flagged — swap heavy
+      // pulling/pressing work for mobility this week.
       focus = 'mobility';
     }
 
@@ -220,7 +295,7 @@ export function generateWeekPlan(profile: AthleteProfile, options: GenerateWeekP
       durationMin: gymDuration,
       focus,
       mode: gymMode,
-      blocks: buildGymSession(focus, gymDuration, profile.level, gymMode),
+      blocks: buildGymSession(focus, gymDuration, profile.level, profile.gymTrainingStyle, medicalExcludeExercises),
     };
   }
 

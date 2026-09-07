@@ -1,4 +1,5 @@
-import { LearnToSwimDay, LearnToSwimDrill, LearnToSwimDrillKind, LearnToSwimPlan, LearnToSwimStage } from './types';
+import { medicalVolumeMultiplier } from './medical';
+import { LearnToSwimDay, LearnToSwimDrill, LearnToSwimDrillKind, LearnToSwimPlan, LearnToSwimStage, MedicalProfile } from './types';
 import { rotateArray } from './week';
 
 /**
@@ -23,10 +24,17 @@ const BASELINE_TOTAL_MINUTES = BASELINE_MINUTES_PER_DAY * BASELINE_TOTAL_DAYS;
 const MIN_TOTAL_DAYS = 14;
 const MAX_TOTAL_DAYS = 60;
 
-/** More minutes/day finishes sooner (down to MIN_TOTAL_DAYS); less minutes/day takes longer (up to MAX_TOTAL_DAYS). */
-export function computeTotalDays(minutesPerDay: number): number {
+/**
+ * More minutes/day finishes sooner (down to MIN_TOTAL_DAYS); less minutes/day takes longer (up
+ * to MAX_TOTAL_DAYS). Self-declared medical caution (src/domain/medical.ts) stretches the
+ * program over more days rather than shortening any single day's drills — the athlete's chosen
+ * per-day time commitment isn't second-guessed, but a flagged injury/condition means spreading
+ * the same content more gently across more calendar days, the same "less volume, same content"
+ * shape medicalVolumeMultiplier already applies to the main training plan.
+ */
+export function computeTotalDays(minutesPerDay: number, medical?: MedicalProfile): number {
   const safeMinutes = Math.max(1, minutesPerDay);
-  const raw = Math.round(BASELINE_TOTAL_MINUTES / safeMinutes);
+  const raw = Math.round(BASELINE_TOTAL_MINUTES / safeMinutes / medicalVolumeMultiplier(medical));
   return Math.min(MAX_TOTAL_DAYS, Math.max(MIN_TOTAL_DAYS, raw));
 }
 
@@ -112,8 +120,8 @@ function buildDayLesson(stage: LearnToSwimStage, minutesPerDay: number, dayWithi
  * The whole curriculum for a chosen daily time budget — deterministic (same minutesPerDay always
  * yields the same plan), matching the rest of src/domain's pure-function, no-I/O contract.
  */
-export function buildLearnToSwimPlan(minutesPerDay: number): LearnToSwimPlan {
-  const totalDays = computeTotalDays(minutesPerDay);
+export function buildLearnToSwimPlan(minutesPerDay: number, medical?: MedicalProfile): LearnToSwimPlan {
+  const totalDays = computeTotalDays(minutesPerDay, medical);
   const stageDays = allocateStageDays(totalDays);
 
   const days: LearnToSwimDay[] = [];

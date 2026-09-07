@@ -11,9 +11,11 @@ import { Collapsible } from '@/components/ui/collapsible';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { computeTotalDays } from '@/domain/learnToSwim';
+import { hasAnyMedicalCaution } from '@/domain/medical';
 import { useTheme } from '@/hooks/use-theme';
 import { formatLearnToSwimDrill, learnToSwimStageLabel } from '@/i18n/format';
 import { useLearnToSwim } from '@/state/learnToSwim-context';
+import { useMedical } from '@/state/medical-context';
 
 const MINUTE_PRESETS = [10, 15, 20, 30, 45, 60];
 
@@ -29,8 +31,9 @@ function SafetyDisclaimer() {
 function OnboardingView() {
   const { t } = useTranslation();
   const { start } = useLearnToSwim();
+  const { medical } = useMedical();
   const [minutesPerDay, setMinutesPerDay] = useState(20);
-  const previewDays = computeTotalDays(minutesPerDay);
+  const previewDays = computeTotalDays(minutesPerDay, medical);
 
   return (
     <ThemedView style={styles.section}>
@@ -64,6 +67,11 @@ function OnboardingView() {
         </ThemedView>
       </Pressable>
 
+      {hasAnyMedicalCaution(medical) && (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+          {t('medical.planCaution')}
+        </ThemedText>
+      )}
       <SafetyDisclaimer />
     </ThemedView>
   );
@@ -72,9 +80,10 @@ function OnboardingView() {
 function PaceSettings() {
   const { t } = useTranslation();
   const { progress, setMinutesPerDay, reset } = useLearnToSwim();
+  const { medical } = useMedical();
   const [minutesPerDay, setLocalMinutes] = useState(progress?.minutesPerDay ?? 20);
   const [confirmingReset, setConfirmingReset] = useState(false);
-  const previewDays = computeTotalDays(minutesPerDay);
+  const previewDays = computeTotalDays(minutesPerDay, medical);
 
   return (
     <Collapsible title={t('learnToSwim.settings.title')}>
@@ -129,6 +138,7 @@ function FinishedView() {
 function ActiveView() {
   const { t } = useTranslation();
   const { plan, progress, currentDay, markCurrentDayDone } = useLearnToSwim();
+  const { medical } = useMedical();
   if (!plan || !progress || !currentDay) return null;
 
   const completedDays = Math.min(progress.completedDays, plan.totalDays);
@@ -160,6 +170,11 @@ function ActiveView() {
         </ThemedView>
       </Pressable>
 
+      {hasAnyMedicalCaution(medical) && (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+          {t('medical.planCaution')}
+        </ThemedText>
+      )}
       <SafetyDisclaimer />
       <PaceSettings />
     </ThemedView>

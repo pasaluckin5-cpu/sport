@@ -9,6 +9,8 @@ import {
   saveLearnToSwimProgress,
 } from '@/storage/learnToSwim-storage';
 
+import { useMedical } from './medical-context';
+
 interface LearnToSwimContextValue {
   isReady: boolean;
   progress: LearnToSwimProgress | null;
@@ -27,6 +29,7 @@ const LearnToSwimContext = createContext<LearnToSwimContextValue | null>(null);
 export function LearnToSwimProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState<LearnToSwimProgress | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const { medical } = useMedical();
 
   useEffect(() => {
     let cancelled = false;
@@ -41,7 +44,10 @@ export function LearnToSwimProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const plan = useMemo(() => (progress ? buildLearnToSwimPlan(progress.minutesPerDay) : null), [progress]);
+  const plan = useMemo(
+    () => (progress ? buildLearnToSwimPlan(progress.minutesPerDay, medical) : null),
+    [progress, medical],
+  );
 
   const value = useMemo<LearnToSwimContextValue>(() => {
     // A pace change can shrink totalDays out from under a completedDays count logged under a
@@ -63,7 +69,7 @@ export function LearnToSwimProvider({ children }: { children: ReactNode }) {
       },
       setMinutesPerDay: async (minutesPerDay: number) => {
         if (!progress) return;
-        const nextPlan = buildLearnToSwimPlan(minutesPerDay);
+        const nextPlan = buildLearnToSwimPlan(minutesPerDay, medical);
         const next: LearnToSwimProgress = {
           minutesPerDay,
           completedDays: Math.min(progress.completedDays, nextPlan.totalDays),
@@ -85,7 +91,7 @@ export function LearnToSwimProvider({ children }: { children: ReactNode }) {
         await clearLearnToSwimProgress();
       },
     };
-  }, [progress, plan, isReady]);
+  }, [progress, plan, isReady, medical]);
 
   return <LearnToSwimContext.Provider value={value}>{children}</LearnToSwimContext.Provider>;
 }

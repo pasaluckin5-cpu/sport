@@ -169,13 +169,80 @@ describe('generateWeekPlan', () => {
     });
   });
 
-  it("gives a 'speed' goal's single gym day a power focus, and 'technique's a mobility/core focus", () => {
+  it('always gives a swim-dryland gym day a fullBody focus regardless of goal (a periodized A/B/C program, not a goal-based body-part split)', () => {
     const speedPlan = generateWeekPlan(withProfile({ goal: 'speed', poolSessionsPerWeek: 3, gymSessionsPerWeek: 1 }));
     const techniquePlan = generateWeekPlan(
       withProfile({ goal: 'technique', poolSessionsPerWeek: 3, gymSessionsPerWeek: 1 }),
     );
+    expect(speedPlan.days.find((d) => d.gym)!.gym!.focus).toBe('fullBody');
+    expect(techniquePlan.days.find((d) => d.gym)!.gym!.focus).toBe('fullBody');
+  });
+
+  it("gives a 'speed' goal's single general-fitness gym day a lowerBody focus, and 'technique's a mobility focus", () => {
+    const speedPlan = generateWeekPlan(withProfile({ goal: 'speed', poolSessionsPerWeek: 0, gymSessionsPerWeek: 1 }));
+    const techniquePlan = generateWeekPlan(
+      withProfile({ goal: 'technique', poolSessionsPerWeek: 0, gymSessionsPerWeek: 1 }),
+    );
     expect(speedPlan.days.find((d) => d.gym)!.gym!.focus).toBe('lowerBody');
     expect(techniquePlan.days.find((d) => d.gym)!.gym!.focus).toBe('mobility');
+  });
+
+  describe('general-fitness gym split/training style selection', () => {
+    it('follows an explicitly chosen split instead of the goal-based rotation', () => {
+      const plan = generateWeekPlan(
+        withProfile({ goal: 'speed', poolSessionsPerWeek: 0, gymSessionsPerWeek: 2, gymSplit: 'upperLower' }),
+      );
+      const focuses = plan.days.filter((d) => d.gym).map((d) => d.gym!.focus);
+      expect(focuses).toEqual(['upperBody', 'lowerBody']);
+    });
+
+    it('cycles a longer split (broSplit) across more gym days than fullBody would', () => {
+      const plan = generateWeekPlan(
+        withProfile({ poolSessionsPerWeek: 0, gymSessionsPerWeek: 4, gymSplit: 'broSplit' }),
+      );
+      const focuses = plan.days.filter((d) => d.gym).map((d) => d.gym!.focus);
+      expect(focuses).toEqual(['chest', 'back', 'shoulders', 'lowerBody']);
+    });
+
+    it('falls back to the goal-based rotation when no split is chosen', () => {
+      const plan = generateWeekPlan(withProfile({ goal: 'speed', poolSessionsPerWeek: 0, gymSessionsPerWeek: 1 }));
+      expect(plan.days.find((d) => d.gym)!.gym!.focus).toBe('lowerBody');
+    });
+
+    it('applies the chosen training style scheme to every gym block', () => {
+      const plan = generateWeekPlan(
+        withProfile({ poolSessionsPerWeek: 0, gymSessionsPerWeek: 1, gymTrainingStyle: 'strength' }),
+      );
+      const gymDay = plan.days.find((d) => d.gym)!;
+      expect(gymDay.gym!.blocks.length).toBeGreaterThan(0);
+      for (const block of gymDay.gym!.blocks) {
+        expect(block.sets).toBe(5);
+        expect(block.reps).toBe('4-6');
+      }
+    });
+
+    it('replaces the gym session with a single cardio block for the cardio style', () => {
+      const plan = generateWeekPlan(
+        withProfile({ poolSessionsPerWeek: 0, gymSessionsPerWeek: 1, gymTrainingStyle: 'cardio' }),
+      );
+      const gymDay = plan.days.find((d) => d.gym)!;
+      expect(gymDay.gym!.blocks).toHaveLength(1);
+      expect(gymDay.gym!.blocks[0].exercise).toBe('cardioSession');
+    });
+
+    it('ignores gymSplit/gymTrainingStyle in swim-dryland mode (always fullBody, A/B/C program)', () => {
+      const plan = generateWeekPlan(
+        withProfile({
+          poolSessionsPerWeek: 3,
+          gymSessionsPerWeek: 1,
+          gymSplit: 'broSplit',
+          gymTrainingStyle: 'strength',
+        }),
+      );
+      const gymDay = plan.days.find((d) => d.gym)!;
+      expect(gymDay.gym!.focus).toBe('fullBody');
+      expect(gymDay.gym!.mode).toBe('swimDryland');
+    });
   });
 
   describe('specialization: primary strokes and race distances', () => {
@@ -321,5 +388,82 @@ describe('generateWeekPlan', () => {
         if (day.pool) expect(day.pool.equipmentUsed).not.toContain('paddles');
       }
     });
+  });
+});
+
+describe('medical adjustments', () => {
+  it('caps pool zone intensity for a heart condition or pregnancy', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 7, goal: 'speed' });
+    const plan = generateWeekPlan(profile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [], conditions: ['heartCondition'] },
+    });
+    const HARD_ZONES = ['vo2max', 'sprint'];
+    for (const day of plan.days) {
+      if (day.pool) expect(HARD_ZONES).not.toContain(day.pool.zone);
+    }
+  });
+
+  it('reduces pool volume for recent surgery', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 3, goal: 'fitness' });
+    const neutralPlan = generateWeekPlan(profile, { weekKey: '2026-W10' });
+    const surgeryPlan = generateWeekPlan(profile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [], conditions: ['recentSurgery'] },
+    });
+    expect(surgeryPlan.totalPoolDistance).toBeLessThan(neutralPlan.totalPoolDistance);
+  });
+
+  it('avoids breaststroke for a knee injury, falling back to freestyle', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 7, primaryStrokes: ['breaststroke'] });
+    const plan = generateWeekPlan(profile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [{ area: 'knee', severity: 'mild' }], conditions: [] },
+    });
+    const strokesUsed = new Set(
+      plan.days
+        .filter((d) => d.pool)
+        .flatMap((d) => d.pool!.main)
+        .map((s) => s.stroke)
+        .filter(Boolean),
+    );
+    expect(strokesUsed).not.toContain('breaststroke');
+  });
+
+  it('excludes shoulder-loading exercises from swim-dryland gym blocks for a shoulder injury', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 3, gymSessionsPerWeek: 3 });
+    const plan = generateWeekPlan(profile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [{ area: 'shoulder', severity: 'moderate' }], conditions: [] },
+    });
+    const shoulderLoading = ['benchPress', 'shoulderPress', 'pullUps', 'pushUps', 'pushUpPlus', 'tricepsDips', 'medBallRotationalThrow'];
+    for (const day of plan.days) {
+      if (!day.gym) continue;
+      for (const block of day.gym.blocks) {
+        expect(shoulderLoading).not.toContain(block.exercise);
+      }
+    }
+  });
+
+  it('excludes knee-loading exercises from general-fitness gym blocks for a knee injury', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 0, gymSessionsPerWeek: 3 });
+    const plan = generateWeekPlan(profile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [{ area: 'knee', severity: 'moderate' }], conditions: [] },
+    });
+    for (const day of plan.days) {
+      if (!day.gym) continue;
+      for (const block of day.gym.blocks) {
+        expect(block.exercise).not.toBe('squats');
+      }
+    }
+  });
+
+  it('leaves the plan unaffected with no medical data', () => {
+    const profile = withProfile({ poolSessionsPerWeek: 3, gymSessionsPerWeek: 2 });
+    const noOption = generateWeekPlan(profile, { weekKey: '2026-W10' });
+    const emptyMedical = generateWeekPlan(profile, { weekKey: '2026-W10', medical: { injuries: [], conditions: [] } });
+    expect(noOption.days).toEqual(emptyMedical.days);
+    expect(noOption.totalPoolDistance).toBe(emptyMedical.totalPoolDistance);
   });
 });

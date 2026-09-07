@@ -107,23 +107,57 @@ The domain layer is split by concern:
     strips it before saving) rather than dividing out a nonsense pace.
 
 **Gym modes**: `workoutLibrary.ts` has two separate gym exercise catalogs, chosen by
-`GymSession.mode`. `poolCount > 0` → `'swimDryland'`: every exercise carries a `SwimBenefit` tag
-(`shoulderHealth` / `pullStrength` / `kickPower` / `corePower` / `explosiveStart` / `mobility`)
-so the athlete can see *why* it's programmed — rotator-cuff/scapular work for shoulder-injury
-prevention, pulling-strength work for the catch/pull phase, explosive hip extension for
-starts/turns, ankle/hip mobility for kick range of motion, rotational core control for the
-streamline position and body roll. `poolCount === 0` (no pool sessions at all — a pure
-gym/fitness athlete) → `'generalFitness'`: the plain strength-split catalog, no swim framing,
-no `benefit` tags. `TrainingGoal` (renamed from `SwimGoal` once it started applying to
-non-swimmers too) also biases which `GymFocus` a gym day gets via
-`GYM_FOCUS_ROTATION_BY_GOAL` — `speed` front-loads power (lowerBody/fullBody), `technique`
-front-loads mobility/core (movement quality — and for swimmers, the shoulder/rotational work
-that most carries over to stroke technique). Unlike the swim zone/stroke rotations, this one is
-**not** rotated by week key: the goal should shape the gym split the same way every week, while
-weekly variety already comes from the swim side. When `poolCount === 0`, gym days are spread
-across the week with the same `POOL_DAY_PATTERNS` table used for pool days (reused purely for
-its "spread N per week" property) instead of the pool-day/rest-day-aware placement used when
-there's swimming to work around.
+`GymSession.mode`. `poolCount > 0` → `'swimDryland'`, `poolCount === 0` (no pool sessions at
+all — a pure gym/fitness athlete) → `'generalFitness'`. The two modes are programmed
+completely differently — a bodybuilding-style body-part split makes sense for a pure lifter,
+but real swimmers are coached with full-body strength & conditioning (S&C) sessions instead, so
+swim-dryland doesn't use `GymFocus` rotation at all:
+- **Swim-dryland: a periodized full-body A/B/C program.** `SWIM_SC_PROGRAM` (a
+  `Record<PeriodizationPhase, Record<'A'|'B'|'C', GymBlock[]>>`) is three rotating full-body
+  sessions whose exercise selection *and* set/rep scheme both shift with the athlete's
+  periodization phase (see "Post-session feedback & periodization" below) — base (general prep,
+  moderate reps, "leave 2-3 in reserve") → build (rising load, lower reps) → peak (adds an
+  explosive jump/med-ball primer before the lifts, lower reps still) → taper (volume cut, stays
+  explosive but far from failure, matching the pool taper's own volume cut). This mirrors real
+  swimmer S&C periodization (base/build/strength→power/speed-and-deload), reusing the
+  *pool side's own* `PeriodizationPhase` rather than inventing a parallel concept, so gym and
+  pool progression stay tied to the same goal race. Falls back to the `'base'` phase content
+  when there's no goal race date — a sensible year-round default rather than requiring a race
+  date to get sound programming. `GymSession.focus` is always `'fullBody'` in this mode
+  (regardless of `TrainingGoal` — a swimmer's dryland split doesn't change by goal, only by
+  periodization phase); the A/B/C day letter cycles by the gym session's 0-based position
+  *within the week* (`i % 3`), independent of which weekday it lands on. Every exercise still
+  carries a `SwimBenefit` tag (`shoulderHealth` / `pullStrength` / `kickPower` / `corePower` /
+  `explosiveStart` / `mobility`) so the athlete can see *why* it's programmed.
+  `buildSwimDrylandGymSession` (`workoutLibrary.ts`) also safety-filters the day's blocks:
+  leg-dominant exercises are dropped the day before a hard swim (don't pre-fatigue the legs
+  before a kick/sprint-heavy zone), and shoulder-loading exercises are dropped when recent
+  feedback or a declared medical shoulder injury calls for avoiding shoulder load (see "Medical
+  profile" below) — both via a shared `filterGymBlocks` helper with a floor of never dropping
+  below 2 blocks (a session cut to nothing isn't a safer session, just a missing one).
+- **General fitness: an explicit split + training style.** `AthleteProfile.gymSplit` (optional,
+  only meaningful when `poolSessionsPerWeek === 0`) is standard strength-training split
+  terminology — `GymSplit`: `fullBody` / `upperLower` / `pushPull` / `pushPullLegs` /
+  `bodyPartSplit` (4-day muscle-group pairing) / `broSplit` (6-day, one muscle group per day).
+  `GYM_SPLIT_ROTATION` maps each split to its `GymFocus[]` sequence (new focuses added just for
+  this mode: `chest`/`back`/`shoulders`/`arms`/`push`/`pull`, alongside the existing
+  `fullBody`/`upperBody`/`lowerBody`/`core`/`mobility`), cycled by the gym session's
+  position-in-week — when set, this *replaces* the older goal-based `GYM_FOCUS_ROTATION_BY_GOAL`
+  rotation for that athlete (unset falls back to the goal-based rotation exactly as before: `speed`
+  front-loads power (lowerBody/fullBody), `technique` front-loads mobility/core). Independently,
+  `AthleteProfile.gymTrainingStyle` (`GymTrainingStyle`: strength/hypertrophy/endurance/
+  functional/circuit/cardio) applies a sets/reps transform on top of whatever exercises the split
+  selects — `STYLE_SCHEME` gives strength/hypertrophy/endurance/functional a fixed sets×reps
+  scheme, `circuit` reuses the existing `reps: 'rounds'` convention, and `cardio` bypasses
+  sets/reps entirely, replacing the whole block list with a single duration-based `cardioSession`
+  block (a steady-state activity doesn't fit the strength-block shape at all). Neither `gymSplit`
+  nor `gymTrainingStyle` is week-rotated (like the pre-existing goal-based rotation, the split/
+  style should shape the week the same way every time; weekly variety comes from which exact days
+  the gym sessions land on as `gymSessionsPerWeek` changes). When `poolCount === 0`, gym days are
+  spread across the week with the same `POOL_DAY_PATTERNS` table used for pool days (reused
+  purely for its "spread N per week" property) instead of the pool-day/rest-day-aware placement
+  used when there's swimming to work around. Chosen on the Profile screen only when
+  `poolSessionsPerWeek === 0` (a `ChipGroup` per field, each toggle-to-clear back to `undefined`).
 
 **Specialization (primary strokes & race distances)**: swimmers can optionally set
 `AthleteProfile.primaryStrokes` (`RaceStroke[]` — freestyle/backstroke/breaststroke/butterfly/im)
@@ -291,6 +325,54 @@ about transitions between strokes, out of scope for now). The Plan screen's `Rac
 `'taper'` — rather than showing a full race-day protocol many weeks out when it isn't actionable
 yet. This is templated coaching knowledge (real, standard pacing/tactics principles), not a
 strategy generated from watching how the athlete actually swims.
+
+**Medical profile**: self-declared, *not diagnosed* — `src/domain/medical.ts` applies only
+general, conservative caution (reduced volume/intensity, avoiding certain exercises or strokes),
+never a personalized medical recommendation; every screen that reads this data shows that
+disclaimer (`MedicalDisclaimer` in `src/components/medical-section.tsx`). Deliberately modeled
+as **independent of `AthleteProfile`** (`MedicalProfile` in `types.ts` — its own
+`Injury[]`/`MedicalCondition[]`, persisted via `src/storage/medical-storage.ts` and
+`src/state/medical-context.tsx`'s `MedicalProvider`/`useMedical()`) since it's a property of the
+*person*, not of any one training program: both the main plan and the independent
+Learn-to-swim program (see below) need to read it, so `MedicalProvider` sits above both
+`PlanProvider` and `LearnToSwimProvider` in `_layout.tsx`'s provider tree. Local-only, no
+Supabase sync and no coach visibility in this pass — making health data visible to a coach
+deserves its own explicit consent step, not a silent default. `Injury.area` reuses the existing
+`PainArea` type (already used by `SessionFeedback.pain`) rather than inventing a duplicate.
+Every adjustment mirrors the "downgrade a day, don't drop it" pattern already established by the
+feedback/periodization system:
+- `medicalZoneCap`/`capZoneIntensity` cap the hardest pool zone the generator will schedule —
+  `recentSurgery` caps at `aerobicBase`, a `heartCondition` or `pregnancy` caps at `threshold` —
+  standard general caution (go all-out only once cleared by a doctor), not a novel medical claim.
+- `medicalVolumeMultiplier` folds into the same combined volume multiplier as periodization/
+  feedback/adherence (`Math.min(1.1, Math.max(0.5, ...))`) — recent surgery cuts hardest (0.7),
+  any other flagged condition cuts mildly (0.9), and each declared injury contributes its own
+  severity-scaled cut (`INJURY_SEVERITY_MULTIPLIER`: mild 1 / moderate 0.9 / severe 0.75). Takes
+  the **minimum** (most conservative) across all simultaneous signals rather than multiplying
+  them together, so several flags at once don't compound into an unrealistically tiny session.
+- `strokesToAvoid` swaps a stroke out for freestyle when it loads an injured area with a
+  well-known mechanism — breaststroke's whip kick for a knee injury, butterfly's repetitive
+  spinal extension for a back injury.
+- `exercisesToAvoidForMedical` (exercise-level, not focus-level — it has to work for
+  swim-dryland's phase-based exercise lists just as much as general-fitness's focus catalogs)
+  drops specific gym exercises for a flagged injury area (heavy pressing/pulling for shoulder,
+  squat/hinge/jump patterns for knee, loaded flexion/heavy hinging for back) — folded into the
+  same `filterGymBlocks` safety filter used for the swim-dryland leg/shoulder rules above (with
+  the same floor: never drop below 2 blocks).
+- Mechanical avoidance (stroke/exercise swaps, zone cap) is **severity-independent** — any
+  severity of a flagged injury triggers it immediately, erring toward caution on injury risk
+  rather than waiting to confirm a trend — while volume reduction is the one severity-scaled
+  signal, consistent with how `avoidShoulderLoad`'s single-sample feedback trigger already works
+  differently from `feedbackVolumeMultiplier`'s multi-sample trend requirement (see below).
+- Wired through `generateWeekPlan`'s `medical?: MedicalProfile` option
+  (`PlanProvider` passes `useMedical().medical`), `buildRaceDayPlan(profile, medical)` (adds a
+  `'medicalCaution'` tactical note to the front of the race-day tactics list when any caution
+  applies), and `computeTotalDays(minutesPerDay, medical)`/`buildLearnToSwimPlan` (stretches the
+  learn-to-swim program over more calendar days via the same volume multiplier, rather than
+  cramming the same content into fewer, higher-intensity days). The Plan and Learn screens both
+  show a short `medical.planCaution` note under the week/program summary whenever
+  `hasAnyMedicalCaution(medical)` is true, alongside a `profile.section.medical` `MedicalSection`
+  (injury + per-injury severity + condition `ChipGroup`s) on the Profile screen.
 
 **Weekly variation & history**: nothing about a *profile* changes week to week, but
 `generateWeekPlan`'s week-key rotation (above) means the actual zone order, stroke emphasis,
