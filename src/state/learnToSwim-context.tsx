@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { buildLearnToSwimPlan } from '@/domain/learnToSwim';
-import { LearnToSwimDay, LearnToSwimPlan } from '@/domain/types';
+import { LearnToSwimDay, LearnToSwimPlan, LearnToSwimStage } from '@/domain/types';
 import {
   clearLearnToSwimProgress,
   loadLearnToSwimProgress,
@@ -18,9 +18,12 @@ interface LearnToSwimContextValue {
   /** The next not-yet-completed day, or null once every day is done (see isFinished). */
   currentDay: LearnToSwimDay | null;
   isFinished: boolean;
+  /** Self-reported "mini goals" checklist — see src/domain/learnToSwim.ts's isMilestoneUnlocked. */
+  achievedMilestones: LearnToSwimStage[];
   start: (minutesPerDay: number) => Promise<void>;
   setMinutesPerDay: (minutesPerDay: number) => Promise<void>;
   markCurrentDayDone: () => Promise<void>;
+  toggleMilestone: (stage: LearnToSwimStage) => Promise<void>;
   reset: () => Promise<void>;
 }
 
@@ -62,8 +65,9 @@ export function LearnToSwimProvider({ children }: { children: ReactNode }) {
       plan,
       currentDay,
       isFinished,
+      achievedMilestones: progress?.achievedMilestones ?? [],
       start: async (minutesPerDay: number) => {
-        const next: LearnToSwimProgress = { minutesPerDay, completedDays: 0 };
+        const next: LearnToSwimProgress = { minutesPerDay, completedDays: 0, achievedMilestones: [] };
         setProgress(next);
         await saveLearnToSwimProgress(next);
       },
@@ -71,6 +75,7 @@ export function LearnToSwimProvider({ children }: { children: ReactNode }) {
         if (!progress) return;
         const nextPlan = buildLearnToSwimPlan(minutesPerDay, medical);
         const next: LearnToSwimProgress = {
+          ...progress,
           minutesPerDay,
           completedDays: Math.min(progress.completedDays, nextPlan.totalDays),
         };
@@ -82,6 +87,17 @@ export function LearnToSwimProvider({ children }: { children: ReactNode }) {
         const next: LearnToSwimProgress = {
           ...progress,
           completedDays: Math.min(progress.completedDays + 1, plan.totalDays),
+        };
+        setProgress(next);
+        await saveLearnToSwimProgress(next);
+      },
+      toggleMilestone: async (stage: LearnToSwimStage) => {
+        if (!progress) return;
+        const achieved = progress.achievedMilestones ?? [];
+        const exists = achieved.includes(stage);
+        const next: LearnToSwimProgress = {
+          ...progress,
+          achievedMilestones: exists ? achieved.filter((s) => s !== stage) : [...achieved, stage],
         };
         setProgress(next);
         await saveLearnToSwimProgress(next);

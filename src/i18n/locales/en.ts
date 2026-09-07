@@ -133,6 +133,20 @@ export default {
       breathingCoordination: { label: 'Breathing coordination' },
       fullStrokeEndurance: { label: 'Full stroke & endurance' },
     },
+    milestones: {
+      title: 'Mini goals',
+      hint: 'One concrete skill check per stage — check one off yourself once you can actually do it, whenever that happens to be during that stage.',
+      locked: 'Reach this stage to unlock',
+    },
+    milestone: {
+      waterComfort: 'Comfortably submerge your face and blow bubbles for 10 seconds without stopping.',
+      floating: 'Float unassisted, front or back, for at least 10 seconds.',
+      gliding: 'Push off the wall and glide 2+ body lengths before your feet touch down.',
+      kicking: 'Kick continuously for 15m/yd using a kickboard, without stopping.',
+      armStroke: 'Combine 5+ continuous arm strokes with a glide, without stopping to stand.',
+      breathingCoordination: 'Swim 10m/yd coordinating breathing with your strokes, without stopping.',
+      fullStrokeEndurance: 'Swim 25m/yd continuously, start to finish, without stopping or standing.',
+    },
     drill: {
       breathControl: 'Breath control: blow bubbles through your nose/mouth at the wall, rhythmically',
       faceSubmersion: 'Submerge your face and open your eyes underwater, holding briefly each time',

@@ -212,6 +212,11 @@ export function learnToSwimStageLabel(stage: LearnToSwimStage, t: TFunction): st
   return t(`learnToSwim.stage.${stage}.label`);
 }
 
+/** The stage's "mini goal" — a concrete, checkable skill target (e.g. "float unassisted for 10 seconds"). */
+export function learnToSwimMilestoneText(stage: LearnToSwimStage, t: TFunction): string {
+  return t(`learnToSwim.milestone.${stage}`);
+}
+
 export function formatLearnToSwimDrill(drill: LearnToSwimDrill, t: TFunction): string {
   return `${drill.minutes}${t('common.min')} · ${t(`learnToSwim.drill.${drill.kind}`)}`;
 }

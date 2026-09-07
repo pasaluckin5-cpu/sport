@@ -45,7 +45,7 @@ export function computeTotalDays(minutesPerDay: number, medical?: MedicalProfile
  * sum to 1. At MIN_TOTAL_DAYS (14), the smallest proportion (0.10) still floors to >=1 day per
  * stage (14 * 0.10 = 1.4) — see learnToSwim.test.ts's coverage of this invariant.
  */
-const STAGE_ORDER: LearnToSwimStage[] = [
+export const STAGE_ORDER: LearnToSwimStage[] = [
   'waterComfort',
   'floating',
   'gliding',
@@ -140,4 +140,22 @@ export function buildLearnToSwimPlan(minutesPerDay: number, medical?: MedicalPro
   }
 
   return { totalDays, minutesPerDay, days };
+}
+
+/**
+ * Mini goals: one concrete, standard "can you do this yet" checkpoint per curriculum stage (see
+ * `learnToSwim.milestone.*` in the locale files for the actual text — e.g. "float unassisted for
+ * 10 seconds") — a tangible marker of real progress alongside the more abstract "day N of M"
+ * counter, self-reported by the learner the same way marking a day's lesson done is (there's no
+ * sensor to verify a skill was actually performed, consistent with the rest of this app's
+ * "computed/self-reported, not sensed" honesty framing).
+ *
+ * A milestone only unlocks once the learner has *reached* that stage in their own plan — checking
+ * off "swim 25m continuously" before ever starting the kicking stage wouldn't mean anything — but
+ * `currentStage: null` (the program is finished) unlocks every milestone, since by then every
+ * stage has been reached.
+ */
+export function isMilestoneUnlocked(milestoneStage: LearnToSwimStage, currentStage: LearnToSwimStage | null): boolean {
+  if (!currentStage) return true;
+  return STAGE_ORDER.indexOf(milestoneStage) <= STAGE_ORDER.indexOf(currentStage);
 }

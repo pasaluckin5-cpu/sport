@@ -10,10 +10,11 @@ import { ThemedView } from '@/components/themed-view';
 import { Collapsible } from '@/components/ui/collapsible';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { computeTotalDays } from '@/domain/learnToSwim';
+import { computeTotalDays, isMilestoneUnlocked, STAGE_ORDER } from '@/domain/learnToSwim';
 import { hasAnyMedicalCaution } from '@/domain/medical';
+import { LearnToSwimStage } from '@/domain/types';
 import { useTheme } from '@/hooks/use-theme';
-import { formatLearnToSwimDrill, learnToSwimStageLabel } from '@/i18n/format';
+import { formatLearnToSwimDrill, learnToSwimMilestoneText, learnToSwimStageLabel } from '@/i18n/format';
 import { useLearnToSwim } from '@/state/learnToSwim-context';
 import { useMedical } from '@/state/medical-context';
 
@@ -77,6 +78,41 @@ function OnboardingView() {
   );
 }
 
+/**
+ * The "mini goals" checklist — one concrete, self-checked skill target per curriculum stage (see
+ * learnToSwim.ts's isMilestoneUnlocked doc comment). `currentStage` is the stage of the next
+ * not-yet-completed day, or null once the whole program is finished (which unlocks every
+ * milestone, since every stage has been reached by then).
+ */
+function MilestonesSection({ currentStage }: { currentStage: LearnToSwimStage | null }) {
+  const { t } = useTranslation();
+  const { achievedMilestones, toggleMilestone } = useLearnToSwim();
+
+  return (
+    <Collapsible title={t('learnToSwim.milestones.title')}>
+      <ThemedText type="small" themeColor="textSecondary">
+        {t('learnToSwim.milestones.hint')}
+      </ThemedText>
+      {STAGE_ORDER.map((stage) => {
+        const unlocked = isMilestoneUnlocked(stage, currentStage);
+        const achieved = achievedMilestones.includes(stage);
+        return (
+          <Pressable
+            key={stage}
+            disabled={!unlocked}
+            onPress={() => toggleMilestone(stage)}
+            style={({ pressed }) => pressed && styles.pressed}>
+            <ThemedText type="small" themeColor={achieved ? 'text' : 'textSecondary'}>
+              {unlocked ? (achieved ? '☑ ' : '☐ ') : '🔒 '}
+              {learnToSwimStageLabel(stage, t)}: {unlocked ? learnToSwimMilestoneText(stage, t) : t('learnToSwim.milestones.locked')}
+            </ThemedText>
+          </Pressable>
+        );
+      })}
+    </Collapsible>
+  );
+}
+
 function PaceSettings() {
   const { t } = useTranslation();
   const { progress, setMinutesPerDay, reset } = useLearnToSwim();
@@ -130,6 +166,7 @@ function FinishedView() {
       <ThemedText themeColor="textSecondary" style={styles.centerText}>
         {t('learnToSwim.finished.subtitle')}
       </ThemedText>
+      <MilestonesSection currentStage={null} />
       <PaceSettings />
     </ThemedView>
   );
@@ -176,6 +213,7 @@ function ActiveView() {
         </ThemedText>
       )}
       <SafetyDisclaimer />
+      <MilestonesSection currentStage={currentDay.stage} />
       <PaceSettings />
     </ThemedView>
   );

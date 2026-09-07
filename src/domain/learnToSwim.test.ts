@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { allocateStageDays, buildLearnToSwimPlan, computeTotalDays } from './learnToSwim';
+import { allocateStageDays, buildLearnToSwimPlan, computeTotalDays, isMilestoneUnlocked, STAGE_ORDER } from './learnToSwim';
 import { LearnToSwimStage } from './types';
 
 describe('computeTotalDays', () => {
@@ -118,5 +118,24 @@ describe('buildLearnToSwimPlan', () => {
     expect(floatingDays.length).toBeGreaterThan(1);
     const drillSequences = floatingDays.map((d) => d.drills.map((drill) => drill.kind).join(','));
     expect(new Set(drillSequences).size).toBeGreaterThan(1);
+  });
+});
+
+describe('isMilestoneUnlocked', () => {
+  it('unlocks a stage at or before the current stage', () => {
+    expect(isMilestoneUnlocked('waterComfort', 'waterComfort')).toBe(true);
+    expect(isMilestoneUnlocked('waterComfort', 'fullStrokeEndurance')).toBe(true);
+    expect(isMilestoneUnlocked('floating', 'kicking')).toBe(true);
+  });
+
+  it('locks a stage after the current stage', () => {
+    expect(isMilestoneUnlocked('fullStrokeEndurance', 'waterComfort')).toBe(false);
+    expect(isMilestoneUnlocked('kicking', 'gliding')).toBe(false);
+  });
+
+  it('unlocks every stage once the program is finished (currentStage: null)', () => {
+    for (const stage of STAGE_ORDER) {
+      expect(isMilestoneUnlocked(stage, null)).toBe(true);
+    }
   });
 });

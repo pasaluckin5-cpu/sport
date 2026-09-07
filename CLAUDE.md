@@ -621,6 +621,20 @@ they sum back exactly).
   anything; `currentDay` is just `plan.days[completedDays]`. Changing pace mid-program
   recalculates the plan and clamps `completedDays` to the new `totalDays` rather than trying to
   reconcile which specific day content was already done.
+- **Mini goals**: alongside the abstract "day N of M" counter, each of the 7 stages carries one
+  concrete, standard "can you do this yet" skill checkpoint (`learnToSwim.milestone.*` — e.g.
+  "float unassisted for 10 seconds", "swim 25m/yd continuously") — a tangible sense of real
+  progress, self-reported by the learner the same way marking a day done is (there's no sensor to
+  verify a skill was actually performed, same honesty framing as the rest of the app). A milestone
+  only *unlocks* once the learner has reached that stage in their own plan
+  (`isMilestoneUnlocked(milestoneStage, currentStage)` — a stage index comparison, exported
+  `STAGE_ORDER`) — checking off "swim 25m continuously" before ever starting the kicking stage
+  wouldn't mean anything — but every milestone unlocks once the whole program is finished
+  (`currentStage: null`), since every stage has been reached by then. Tracked as
+  `LearnToSwimProgress.achievedMilestones` (a set of stages, not a count — unlike days, these can
+  be checked in any order once unlocked), toggled via `useLearnToSwim().toggleMilestone`. Shown as
+  a `MilestonesSection` `Collapsible` (`src/app/learn.tsx`) on both the active-program and
+  finished views, listing all 7 with a ☐/☑/🔒 state per stage.
 - **Local-only, no cloud sync** (unlike `AthleteProfile`/history/stroke log): a small,
   self-contained checklist that doesn't need cross-device continuity or coach visibility to be
   useful — a deliberate scope decision, not an oversight, consistent with how the whole app
