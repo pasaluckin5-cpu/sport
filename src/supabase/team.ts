@@ -8,11 +8,10 @@ export async function fetchMyTeam(coachId: string): Promise<TeamRow | null> {
   return (data as TeamRow | null) ?? null;
 }
 
-export async function createTeam(coachId: string, name: string): Promise<TeamRow | null> {
-  if (!supabase) return null;
+export async function createTeam(coachId: string, name: string): Promise<{ team: TeamRow | null; error: string | null }> {
+  if (!supabase) return { team: null, error: 'Not configured' };
   const { data, error } = await supabase.from('teams').insert({ coach_id: coachId, name }).select().single();
-  if (error) return null;
-  return data as TeamRow;
+  return { team: error ? null : (data as TeamRow), error: error ? error.message : null };
 }
 
 export interface TeamMemberWithEmail extends TeamMemberRow {
