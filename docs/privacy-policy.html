@@ -57,18 +57,25 @@
       unless that athlete is also on one of the coach's teams. Leaving a team (or never joining
       one) means no coach can see any of your data. An administrator role exists for account
       support and moderation but is not assigned to anyone by default.</p>
+    <p><strong>Your self-declared medical profile</strong> (injuries and conditions, if you choose
+      to log any in Profile) is the one exception to all of the above: it stays local-only and is
+      never uploaded to the cloud, even with an account, unless you explicitly turn on "Share with
+      my coach" in that same section. Turning it on shares it only with a coach whose team you're
+      actively on at the time; turning it back off deletes it from the cloud immediately, revoking
+      that coach's access. No one else — not a friend, not another coach — can ever see it.</p>
     <p><strong>If you add a friend</strong> (by email, once they accept), what a friend can see is
       much narrower than a coach: only your logged results and your basic profile (email and, if
       set, gender — used to compare a result against the same classification standards shown
       elsewhere in the app). A friend never sees your training-plan settings, completed-session
-      history, or stroke-count log. Removing a friend (either side can) immediately stops that
-      access.</p>
+      history, stroke-count log, or medical profile. Removing a friend (either side can)
+      immediately stops that access.</p>
     <p>Nothing you enter is sold or shared with any third party beyond Supabase acting as our
       database/authentication provider to run the app; we don't run analytics or ads.</p>
     <p>You can see everything stored locally via the app's own Profile screen, copy it out
       (Backup &amp; restore) or delete it at any time by clearing the app's storage in your
       device settings or uninstalling the app. If you have an account, you can delete your
-      cloud-stored profile/history/stroke-log/results data from the Account section in Profile;
+      cloud-stored profile/history/stroke-log/medical/results data from the Account section in
+      Profile;
       deleting the underlying login itself (email/password) currently requires contacting the
       developer, since a fully self-service account-deletion flow hasn't shipped yet — this
       policy will be updated when it does.</p>
@@ -96,19 +103,28 @@
       может видеть данные другого спортсмена, если тот не состоит в одной из его команд. Если вы
       не состоите в команде (или покинули её), ни один тренер не видит ваши данные. Роль
       администратора существует для поддержки и модерации, но по умолчанию никому не назначена.</p>
+    <p><strong>Ваш медицинский профиль</strong> (травмы и состояния здоровья, если вы решите
+      указать их в разделе «Профиль») — единственное исключение из всего вышесказанного: он
+      остаётся только локальным и никогда не загружается в облако, даже с аккаунтом, если вы явно
+      не включите «Поделиться с тренером» в том же разделе. Включение делится им только с
+      тренером, в чьей команде вы состоите на данный момент; отключение немедленно удаляет его из
+      облака, лишая этого тренера доступа. Никто другой — ни друг, ни другой тренер — никогда не
+      сможет его увидеть.</p>
     <p><strong>Если вы добавляете друга</strong> (по email, после того как он примет заявку), то,
       что видит друг, гораздо уже, чем у тренера: только ваши добавленные результаты и базовый
       профиль (email и, если указан, пол — используется для сравнения результата с теми же
       разрядными нормативами, что показаны в остальном приложении). Друг никогда не видит
-      настройки вашего плана тренировок, историю выполненных тренировок или журнал гребков.
-      Удаление из друзей (может сделать любая из сторон) сразу прекращает этот доступ.</p>
+      настройки вашего плана тренировок, историю выполненных тренировок, журнал гребков или
+      медицинский профиль. Удаление из друзей (может сделать любая из сторон) сразу прекращает
+      этот доступ.</p>
     <p>Ничего из введённого не продаётся и не передаётся третьим лицам, кроме Supabase как
       поставщика базы данных и аутентификации, необходимого для работы приложения; рекламы и
       аналитики в приложении нет.</p>
     <p>Все данные, хранящиеся локально, видны на экране профиля приложения, их можно скопировать
       (раздел «Резервная копия») или удалить в любой момент, очистив хранилище приложения в
       настройках устройства или удалив приложение. Если у вас есть аккаунт, вы можете удалить
-      свои облачные данные (профиль/историю/журнал гребков/результаты) в разделе «Аккаунт» на
+      свои облачные данные (профиль/историю/журнал гребков/медицинский профиль/результаты) в
+      разделе «Аккаунт» на
       экране профиля; удаление самого логина (email/пароль) пока требует обращения к
       разработчику, так как полностью самостоятельное удаление аккаунта ещё не реализовано — эта
       политика будет обновлена, когда это появится.</p>

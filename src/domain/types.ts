@@ -195,7 +195,7 @@ export interface StrokeCountEntry {
 export type Difficulty = 'easy' | 'moderate' | 'hard' | 'tooHard';
 
 /** Where it hurt, if anywhere — 'other' covers anything not worth its own category. */
-export type PainArea = 'shoulder' | 'knee' | 'back' | 'other';
+export type PainArea = 'shoulder' | 'knee' | 'back' | 'wrist' | 'hip' | 'ankle' | 'other';
 
 export interface SessionFeedback {
   difficulty: Difficulty;
@@ -217,10 +217,15 @@ export interface Injury {
  * src/domain/medical.ts), never a personalized medical recommendation. Kept separate from
  * AthleteProfile (see src/state/medical-context.tsx) since it's a property of the person, not
  * of any one training program — both the main plan and the learn-to-swim program read it.
+ * `shareWithCoach` is a separate, explicit opt-in (default false/unset) gating whether this data
+ * is ever synced to Supabase and made visible to a linked coach at all — local-only by default,
+ * same as the rest of this profile, until the athlete deliberately turns sharing on. See
+ * src/state/medical-context.tsx's sync effect and supabase/migrations/0004_coach_medical_visibility.sql.
  */
 export interface MedicalProfile {
   injuries: Injury[];
   conditions: MedicalCondition[];
+  shareWithCoach?: boolean;
 }
 
 export type MedicalCondition =
@@ -231,6 +236,8 @@ export type MedicalCondition =
   | 'highBloodPressure'
   | 'epilepsy'
   | 'scoliosis'
+  | 'osteoporosis'
+  | 'anemia'
   | 'recentSurgery'
   | 'other';
 

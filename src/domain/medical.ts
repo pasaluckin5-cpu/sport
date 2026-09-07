@@ -39,11 +39,11 @@ const ZONE_INTENSITY_ORDER: Zone[] = ['recovery', 'technique', 'aerobicBase', 't
  *   asthma) or the breath-holding/hyperventilation pattern of max-effort sprint sets (a
  *   possible seizure-risk factor for epilepsy) are the specific thing to avoid, not moderate-
  *   hard aerobic work.
- * - `diabetes`, `scoliosis`, and `other` have no zone cap — diabetes's caution is about session
- *   duration/monitoring (see medicalVolumeMultiplier), not an intensity ceiling; scoliosis's is
- *   about which *gym* exercises load the spine (see exercisesToAvoidForMedical below), not
- *   swim/cardio intensity — swimming itself is commonly recommended as low-impact, spine-neutral
- *   exercise for scoliosis, so there's no reason to cap pool zones for it.
+ * - `diabetes`, `anemia`, `scoliosis`, `osteoporosis`, and `other` have no zone cap — diabetes's
+ *   and anemia's caution is about session duration/fatigue (see medicalVolumeMultiplier), not an
+ *   intensity ceiling; scoliosis's and osteoporosis's are entirely about which *gym* exercises
+ *   load the spine/skeleton (see exercisesToAvoidForMedical below), not swim/cardio intensity —
+ *   swimming itself is commonly recommended as low-impact exercise for both.
  */
 const CONDITION_ZONE_CAP: Partial<Record<MedicalCondition, Zone>> = {
   recentSurgery: 'aerobicBase',
@@ -85,20 +85,24 @@ const INJURY_SEVERITY_MULTIPLIER: Record<InjurySeverity, number> = { mild: 1, mo
  * (0.85) — a heart condition and pregnancy both already carry a zone cap above, and diabetes
  * carries hypoglycemia risk that rises with prolonged session duration even without a hard
  * effort, so cutting overall volume is the relevant general caution there rather than an
- * intensity ceiling; every other flagged condition (`highBloodPressure`, `asthma`, `epilepsy`,
- * `scoliosis`, `other`) gets the mildest general cut (0.9) — "declared something, so trim volume
- * a bit" as a baseline caution alongside whatever more specific adjustment that condition also
- * gets (zone cap, equipment/exercise avoidance — see below).
+ * intensity ceiling — `anemia` joins that bucket for the same duration-sensitive reason (reduced
+ * oxygen-carrying capacity makes sustained/prolonged effort the thing to moderate, not peak
+ * intensity); every other flagged condition (`highBloodPressure`, `asthma`, `epilepsy`,
+ * `scoliosis`, `osteoporosis`, `other`) gets the mildest general cut (0.9) — "declared something,
+ * so trim volume a bit" as a baseline caution alongside whatever more specific adjustment that
+ * condition also gets (zone cap, equipment/exercise avoidance — see below).
  */
 const CONDITION_VOLUME_MULTIPLIER: Record<MedicalCondition, number> = {
   recentSurgery: 0.7,
   heartCondition: 0.85,
   pregnancy: 0.85,
   diabetes: 0.85,
+  anemia: 0.85,
   highBloodPressure: 0.9,
   asthma: 0.9,
   epilepsy: 0.9,
   scoliosis: 0.9,
+  osteoporosis: 0.9,
   other: 0.9,
 };
 
@@ -120,25 +124,34 @@ export function medicalVolumeMultiplier(medical: MedicalProfile | undefined): nu
   return mult;
 }
 
-/** Well-established stroke/injury pairings: breaststroke's whip kick loads the knee; butterfly's repetitive spinal extension loads the back. */
+/**
+ * Well-established stroke/injury pairings: breaststroke's whip kick loads both the knee and the
+ * hip (so both injury areas avoid it — deduplicated via a Set since an athlete can flag both at
+ * once); butterfly's repetitive spinal extension loads the back.
+ */
 export function strokesToAvoid(medical: MedicalProfile | undefined): RaceStroke[] {
-  const avoided: RaceStroke[] = [];
-  if (hasInjury(medical, 'knee')) avoided.push('breaststroke');
-  if (hasInjury(medical, 'back')) avoided.push('butterfly');
-  return avoided;
+  const avoided = new Set<RaceStroke>();
+  if (hasInjury(medical, 'knee')) avoided.add('breaststroke');
+  if (hasInjury(medical, 'hip')) avoided.add('breaststroke');
+  if (hasInjury(medical, 'back')) avoided.add('butterfly');
+  return Array.from(avoided);
 }
 
 /**
  * Specific gym exercises to drop for a flagged injury area — well-known load patterns (heavy
  * pressing/pulling for shoulder, squat/hinge/jump patterns for knee, loaded spinal flexion or
- * heavy hinging for back), not an attempt to cover every possible exercise. Used to filter
- * whatever exercise list a gym day would otherwise get (see workoutLibrary.ts), for both the
- * swim-dryland S&C program and the general-fitness split.
+ * heavy hinging for back, weight-bearing wrist extension for wrist, hip-flexion-under-load for
+ * hip, ankle-loading/impact patterns for ankle), not an attempt to cover every possible exercise.
+ * Used to filter whatever exercise list a gym day would otherwise get (see workoutLibrary.ts),
+ * for both the swim-dryland S&C program and the general-fitness split.
  */
 const EXERCISES_TO_AVOID_BY_INJURY: Record<PainArea, GymExercise[]> = {
   shoulder: ['benchPress', 'shoulderPress', 'pullUps', 'pushUps', 'pushUpPlus', 'tricepsDips', 'medBallRotationalThrow'],
   knee: ['squats', 'romanianDeadlift', 'bulgarianSplitSquat', 'stepUp', 'walkingLunges', 'squatJump', 'hipThrust', 'calfRaises'],
   back: ['romanianDeadlift', 'squats', 'russianTwists', 'squatJump', 'medBallRotationalThrow'],
+  wrist: ['pushUps', 'pushUpPlus', 'plank', 'tricepsDips', 'benchPress'],
+  hip: ['hipThrust', 'walkingLunges', 'bulgarianSplitSquat', 'stepUp', 'squats'],
+  ankle: ['squatJump', 'calfRaises', 'stepUp', 'walkingLunges', 'bulgarianSplitSquat'],
   other: [],
 };
 
@@ -153,6 +166,10 @@ const EXERCISES_TO_AVOID_BY_INJURY: Record<PainArea, GymExercise[]> = {
  *   spinal curvature carries the same "don't heavily load or twist the spine" concern; this is
  *   specifically a gym-side adjustment (see medicalZoneCap's doc comment — swimming itself isn't
  *   restricted for scoliosis).
+ * - `osteoporosis` drops the same explosive/high-impact pair as highBloodPressure/pregnancy —
+ *   reduced bone density raises fracture risk under sudden high-impact or explosive loading,
+ *   general caution for this condition specifically (also a gym-side-only adjustment, same
+ *   reasoning as scoliosis: low-impact swimming isn't restricted).
  * The jump/throw exercises are also the ones the swim-dryland peak/taper phases add as an
  * explosive primer (see SWIM_SC_PROGRAM in workoutLibrary.ts), so all of these reuse
  * `filterGymBlocks`'s floor-of-2 safety net exactly like the per-injury exclusions above.
@@ -161,6 +178,7 @@ const EXERCISES_TO_AVOID_BY_CONDITION: Partial<Record<MedicalCondition, GymExerc
   highBloodPressure: ['squatJump', 'medBallRotationalThrow'],
   pregnancy: ['squatJump', 'medBallRotationalThrow'],
   scoliosis: ['squats', 'romanianDeadlift', 'russianTwists', 'squatJump', 'medBallRotationalThrow'],
+  osteoporosis: ['squatJump', 'medBallRotationalThrow'],
 };
 
 export function exercisesToAvoidForMedical(medical: MedicalProfile | undefined): GymExercise[] {
@@ -188,11 +206,26 @@ const EQUIPMENT_TO_AVOID_BY_CONDITION: Partial<Record<MedicalCondition, Equipmen
   epilepsy: ['snorkel'],
 };
 
+/**
+ * Pool equipment to drop for a flagged injury area — `wrist` because paddles add substantial
+ * hand/wrist loading on the catch and pull; `ankle` because fins add resistance/range load right
+ * at the joint during kick sets. Merged alongside the condition-based exclusions above; shoulder's
+ * own paddle avoidance is handled separately in planGenerator.ts (it's driven by the same flag
+ * that also downgrades a gym day to mobility, not just an equipment swap).
+ */
+const EQUIPMENT_TO_AVOID_BY_INJURY: Partial<Record<PainArea, Equipment[]>> = {
+  wrist: ['paddles'],
+  ankle: ['fins'],
+};
+
 export function equipmentToAvoidForMedical(medical: MedicalProfile | undefined): Equipment[] {
   if (!medical) return [];
   const avoided = new Set<Equipment>();
   for (const condition of medical.conditions) {
     for (const equipment of EQUIPMENT_TO_AVOID_BY_CONDITION[condition] ?? []) avoided.add(equipment);
+  }
+  for (const injury of medical.injuries) {
+    for (const equipment of EQUIPMENT_TO_AVOID_BY_INJURY[injury.area] ?? []) avoided.add(equipment);
   }
   return Array.from(avoided);
 }

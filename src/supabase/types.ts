@@ -1,4 +1,4 @@
-import { GymBlock, GymFocus, SessionFeedback, SetStep, Zone } from '@/domain/types';
+import { GymBlock, GymFocus, Injury, MedicalCondition, SessionFeedback, SetStep, Zone } from '@/domain/types';
 
 /**
  * Hand-written row types mirroring supabase/migrations/0001_init.sql — there's no live project
@@ -35,6 +35,21 @@ export interface AthleteProfileRow {
   primary_strokes: string[] | null;
   primary_distances: number[] | null;
   goal_race_date: string | null;
+  updated_at: string;
+}
+
+/**
+ * Mirrors src/domain/types.ts's MedicalProfile 1:1 — only ever present in the cloud when the
+ * athlete has explicitly turned on `share_with_coach` (see supabase/migrations/
+ * 0004_coach_medical_visibility.sql); RLS additionally gates a linked coach's read on that same
+ * flag, but the app also only writes a row here at all when sharing is on (see
+ * src/state/medical-context.tsx), so an un-shared athlete's medical data never leaves the device.
+ */
+export interface MedicalProfileRow {
+  user_id: string;
+  injuries: Injury[];
+  conditions: MedicalCondition[];
+  share_with_coach: boolean;
   updated_at: string;
 }
 

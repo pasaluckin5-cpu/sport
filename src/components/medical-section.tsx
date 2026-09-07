@@ -1,14 +1,15 @@
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { ChipGroup } from '@/components/chip-group';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { InjurySeverity, MedicalCondition, PainArea } from '@/domain/types';
+import { useAuth } from '@/state/auth-context';
 import { useMedical } from '@/state/medical-context';
 
-const INJURY_AREAS: PainArea[] = ['shoulder', 'knee', 'back', 'other'];
+const INJURY_AREAS: PainArea[] = ['shoulder', 'knee', 'back', 'wrist', 'hip', 'ankle', 'other'];
 const SEVERITIES: InjurySeverity[] = ['mild', 'moderate', 'severe'];
 const CONDITIONS: MedicalCondition[] = [
   'asthma',
@@ -18,6 +19,8 @@ const CONDITIONS: MedicalCondition[] = [
   'highBloodPressure',
   'epilepsy',
   'scoliosis',
+  'osteoporosis',
+  'anemia',
   'recentSurgery',
   'other',
 ];
@@ -38,7 +41,8 @@ export function MedicalDisclaimer() {
 
 export function MedicalSection() {
   const { t } = useTranslation();
-  const { medical, toggleInjury, setInjurySeverity, toggleCondition } = useMedical();
+  const { medical, toggleInjury, setInjurySeverity, toggleCondition, setShareWithCoach } = useMedical();
+  const { isConfigured, session } = useAuth();
 
   return (
     <View style={{ gap: Spacing.two }}>
@@ -73,6 +77,22 @@ export function MedicalSection() {
         selected={medical.conditions}
         onToggle={toggleCondition}
       />
+
+      {isConfigured && (
+        <ThemedView style={{ gap: Spacing.one, marginTop: Spacing.two }}>
+          <Pressable
+            onPress={() => setShareWithCoach(!medical.shareWithCoach)}
+            style={({ pressed }) => pressed && { opacity: 0.7 }}>
+            <ThemedText type="small" themeColor={medical.shareWithCoach ? 'text' : 'textSecondary'}>
+              {medical.shareWithCoach ? '☑ ' : '☐ '}
+              {t('medical.shareWithCoach.label')}
+            </ThemedText>
+          </Pressable>
+          <ThemedText type="small" themeColor="textSecondary">
+            {session ? t('medical.shareWithCoach.hint') : t('medical.shareWithCoach.hintSignedOut')}
+          </ThemedText>
+        </ThemedView>
+      )}
     </View>
   );
 }

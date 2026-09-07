@@ -59,8 +59,13 @@ describe('medicalZoneCap', () => {
     expect(medicalZoneCap({ injuries: [], conditions: ['other'] })).toBeUndefined();
   });
 
-  it('has no zone cap for scoliosis (its caution is about gym exercise selection, not swim intensity)', () => {
+  it('has no zone cap for scoliosis or osteoporosis (their caution is about gym exercise selection, not swim intensity)', () => {
     expect(medicalZoneCap({ injuries: [], conditions: ['scoliosis'] })).toBeUndefined();
+    expect(medicalZoneCap({ injuries: [], conditions: ['osteoporosis'] })).toBeUndefined();
+  });
+
+  it('has no zone cap for anemia (its caution is about volume/fatigue, not intensity)', () => {
+    expect(medicalZoneCap({ injuries: [], conditions: ['anemia'] })).toBeUndefined();
   });
 
   it('recent surgery takes priority over a milder cap when both are present', () => {
@@ -106,10 +111,16 @@ describe('medicalVolumeMultiplier', () => {
     expect(medicalVolumeMultiplier({ injuries: [], conditions: ['other'] })).toBe(0.9);
   });
 
-  it('cuts volume harder for a heart condition, pregnancy, or diabetes', () => {
+  it('cuts volume harder for a heart condition, pregnancy, diabetes, or anemia', () => {
     expect(medicalVolumeMultiplier({ injuries: [], conditions: ['heartCondition'] })).toBe(0.85);
     expect(medicalVolumeMultiplier({ injuries: [], conditions: ['pregnancy'] })).toBe(0.85);
     expect(medicalVolumeMultiplier({ injuries: [], conditions: ['diabetes'] })).toBe(0.85);
+    expect(medicalVolumeMultiplier({ injuries: [], conditions: ['anemia'] })).toBe(0.85);
+  });
+
+  it('cuts volume mildly for scoliosis or osteoporosis (their main lever is exercise selection)', () => {
+    expect(medicalVolumeMultiplier({ injuries: [], conditions: ['scoliosis'] })).toBe(0.9);
+    expect(medicalVolumeMultiplier({ injuries: [], conditions: ['osteoporosis'] })).toBe(0.9);
   });
 
   it('scales the cut by injury severity', () => {
@@ -153,6 +164,21 @@ describe('strokesToAvoid', () => {
       conditions: [],
     });
     expect(both).toEqual(['breaststroke', 'butterfly']);
+  });
+
+  it('avoids breaststroke for a hip injury too (same whip-kick loading concern as the knee)', () => {
+    expect(strokesToAvoid({ injuries: [{ area: 'hip', severity: 'mild' }], conditions: [] })).toEqual(['breaststroke']);
+  });
+
+  it('de-duplicates breaststroke when both a knee and a hip injury are flagged', () => {
+    const both = strokesToAvoid({
+      injuries: [
+        { area: 'knee', severity: 'mild' },
+        { area: 'hip', severity: 'mild' },
+      ],
+      conditions: [],
+    });
+    expect(both).toEqual(['breaststroke']);
   });
 });
 
@@ -199,6 +225,26 @@ describe('exercisesToAvoidForMedical', () => {
     expect(scoliosis).toEqual(expect.arrayContaining(['squats', 'romanianDeadlift', 'russianTwists']));
   });
 
+  it('lists explosive/high-impact exercises for osteoporosis (fracture risk under sudden loading)', () => {
+    const osteoporosis = exercisesToAvoidForMedical({ injuries: [], conditions: ['osteoporosis'] });
+    expect(osteoporosis).toEqual(expect.arrayContaining(['squatJump', 'medBallRotationalThrow']));
+  });
+
+  it('lists weight-bearing wrist-extension exercises for a wrist injury', () => {
+    const avoided = exercisesToAvoidForMedical({ injuries: [{ area: 'wrist', severity: 'mild' }], conditions: [] });
+    expect(avoided).toEqual(expect.arrayContaining(['pushUps', 'plank']));
+  });
+
+  it('lists hip-loading exercises for a hip injury', () => {
+    const avoided = exercisesToAvoidForMedical({ injuries: [{ area: 'hip', severity: 'mild' }], conditions: [] });
+    expect(avoided).toEqual(expect.arrayContaining(['hipThrust', 'squats']));
+  });
+
+  it('lists ankle-loading/impact exercises for an ankle injury', () => {
+    const avoided = exercisesToAvoidForMedical({ injuries: [{ area: 'ankle', severity: 'mild' }], conditions: [] });
+    expect(avoided).toEqual(expect.arrayContaining(['squatJump', 'calfRaises']));
+  });
+
   it('has no exercise exclusions for conditions without a specific list (asthma, diabetes, etc.)', () => {
     expect(exercisesToAvoidForMedical({ injuries: [], conditions: ['asthma'] })).toEqual([]);
     expect(exercisesToAvoidForMedical({ injuries: [], conditions: ['diabetes'] })).toEqual([]);
@@ -239,6 +285,23 @@ describe('equipmentToAvoidForMedical', () => {
   it('combines exclusions from multiple flagged conditions', () => {
     const avoided = equipmentToAvoidForMedical({ injuries: [], conditions: ['asthma', 'epilepsy'] });
     expect(avoided).toEqual(expect.arrayContaining(['parachute', 'snorkel']));
+    expect(avoided).toHaveLength(2);
+  });
+
+  it('avoids paddles for a wrist injury (extra hand/wrist loading on the catch and pull)', () => {
+    expect(equipmentToAvoidForMedical({ injuries: [{ area: 'wrist', severity: 'mild' }], conditions: [] })).toEqual(['paddles']);
+  });
+
+  it('avoids fins for an ankle injury (resistance/range load right at the joint)', () => {
+    expect(equipmentToAvoidForMedical({ injuries: [{ area: 'ankle', severity: 'mild' }], conditions: [] })).toEqual(['fins']);
+  });
+
+  it('combines injury-based and condition-based equipment exclusions', () => {
+    const avoided = equipmentToAvoidForMedical({
+      injuries: [{ area: 'wrist', severity: 'mild' }],
+      conditions: ['asthma'],
+    });
+    expect(avoided).toEqual(expect.arrayContaining(['paddles', 'parachute']));
     expect(avoided).toHaveLength(2);
   });
 });

@@ -11,12 +11,13 @@ import { Collapsible } from '@/components/ui/collapsible';
 import { Spacing } from '@/constants/theme';
 import { daysUntilRace, extractFeedbackHistory, FeedbackHistoryEntry, periodizationPhase } from '@/domain/periodization';
 import { buildRaceDayPlan } from '@/domain/raceDayPlan';
-import { AthleteProfile, GymExercise, GymFocus, RaceStroke, SetStepKind, Zone } from '@/domain/types';
+import { AthleteProfile, GymExercise, GymFocus, MedicalProfile, RaceStroke, SetStepKind, Zone } from '@/domain/types';
 import { isoWeekKey } from '@/domain/week';
 import { periodizationNoteText } from '@/i18n/format';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/state/auth-context';
 import { sendMessage, sendTeamMessage, fetchThread, fetchTeamChat } from '@/supabase/chat';
+import { fetchCloudMedical } from '@/supabase/medical';
 import { addResult } from '@/supabase/results';
 import { fetchCloudCompletions, fetchCloudProfile, setAthleteGoalRaceDate } from '@/supabase/sync';
 import {
@@ -381,6 +382,7 @@ function AthleteInsightsPanel({ athletes }: { athletes: TeamMemberWithEmail[] })
   const [athleteEmail, setAthleteEmail] = useState(athletes[0]?.email ?? '');
   const [profile, setProfile] = useState<AthleteProfile | null>(null);
   const [feedbackEntries, setFeedbackEntries] = useState<FeedbackHistoryEntry[]>([]);
+  const [medical, setMedical] = useState<MedicalProfile | null>(null);
   const [raceInDays, setRaceInDays] = useState(60);
   const [message, setMessage] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -388,12 +390,17 @@ function AthleteInsightsPanel({ athletes }: { athletes: TeamMemberWithEmail[] })
   const athlete = athletes.find((m) => m.email === athleteEmail);
 
   async function refresh(athleteId: string) {
-    const [fetchedProfile, completions] = await Promise.all([
+    const [fetchedProfile, completions, fetchedMedical] = await Promise.all([
       fetchCloudProfile(athleteId),
       fetchCloudCompletions(athleteId),
+      fetchCloudMedical(athleteId),
     ]);
     setProfile(fetchedProfile);
     setFeedbackEntries(extractFeedbackHistory(completions, 6));
+    // Only ever non-null when this athlete has explicitly turned on sharing (RLS enforces this
+    // independently — see supabase/migrations/0004_coach_medical_visibility.sql) — so a coach
+    // never sees medical data an athlete hasn't consented to share.
+    setMedical(fetchedMedical);
     setLoaded(true);
   }
 
@@ -514,6 +521,34 @@ function AthleteInsightsPanel({ athletes }: { athletes: TeamMemberWithEmail[] })
               <RaceDayPlanView plan={racePlan} unit={profile.unit} />
             </View>
           )}
+
+          <View style={styles.nested}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('coach.insights.medicalTitle')}
+            </ThemedText>
+            {!medical ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('coach.insights.medicalNotShared')}
+              </ThemedText>
+            ) : medical.injuries.length === 0 && medical.conditions.length === 0 ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('coach.insights.medicalNone')}
+              </ThemedText>
+            ) : (
+              <>
+                {medical.injuries.map((injury) => (
+                  <ThemedText key={injury.area} type="small">
+                    {t(`feedback.pain.${injury.area}`)} · {t(`medical.severity.${injury.severity}`)}
+                  </ThemedText>
+                ))}
+                {medical.conditions.length > 0 && (
+                  <ThemedText type="small">
+                    {medical.conditions.map((c) => t(`medical.condition.${c}`)).join(', ')}
+                  </ThemedText>
+                )}
+              </>
+            )}
+          </View>
         </>
       )}
     </View>

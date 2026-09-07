@@ -547,6 +547,45 @@ above) to cover periodization and post-session feedback too — the two adaptati
   (`src/components/race-day-plan-view.tsx`, factored out of `src/app/index.tsx`'s own
   `RaceDaySection` so both render identically rather than duplicating that JSX).
 
+## Coach medical visibility (supabase/migrations/0004_coach_medical_visibility.sql)
+
+A fourth additive migration, giving a linked coach *optional, revocable* read access to an
+athlete's self-declared `MedicalProfile` (`src/domain/medical.ts`) — deliberately kept out of
+the unconditional `athlete_profiles`/`completions`/`stroke_log` coach grant from 0001, since a
+list of injuries/conditions is a materially more sensitive category of data than training
+settings.
+
+- **New table, not a column on an existing one**: `medical_profiles` (`user_id` PK/FK, `injuries`
+  jsonb, `conditions` jsonb, `share_with_coach` boolean default `false`, `updated_at`) — kept
+  separate from `athlete_profiles` specifically so it can carry its own, stricter RLS select
+  policy without touching the existing training-profile grant.
+- **Consent is enforced twice, at two different layers, on purpose**:
+  1. **The app never writes a row here at all unless `shareWithCoach` is true.**
+     `src/state/medical-context.tsx` only calls `upsertCloudMedical` when the athlete has turned
+     sharing on, and calls `deleteCloudMedical` the moment they turn it back off — so an
+     un-shared athlete's medical data simply never reaches Supabase, the same "local-only by
+     default" property the rest of this profile already had before this migration.
+  2. **RLS re-checks the same flag independently**: `medical_profiles_select` requires
+     `share_with_coach and is_linked_coach_of(user_id)` for a non-owner read — defense in depth
+     in case some future code path ever wrote a row without the flag set, not the primary
+     boundary (that's #1).
+- **Both conditions are required, not either**: turning sharing on with no coach yet, or being on
+  a coach's team with sharing off, both correctly show nothing — matches
+  `medical.shareWithCoach.hint`'s copy in the app ("a coach on your team can see...").
+- **`src/supabase/medical.ts`** (`fetchCloudMedical`/`upsertCloudMedical`/`deleteCloudMedical`) is
+  the sync layer, mirroring the row-mapping pattern in `src/supabase/sync.ts`; the same
+  `fetchCloudMedical` call is used for both an athlete reading their own row and a coach reading
+  a linked athlete's — RLS alone decides what's actually returned in either case, there's no
+  separate "as coach" code path to keep in sync.
+- **UI**: `src/components/medical-section.tsx` gets a "Share with my coach" checkbox (only shown
+  when Supabase is configured at all) right under the existing injury/condition chips;
+  `src/components/coach-dashboard.tsx`'s `AthleteInsightsPanel` gets a new nested "Medical
+  profile" block that renders the fetched data (or "hasn't shared" / "nothing logged" text) using
+  the same `feedback.pain.*`/`medical.severity.*`/`medical.condition.*` i18n keys the athlete's
+  own Profile screen already uses.
+- **`deleteCloudData`** (`src/supabase/sync.ts`, the "delete my cloud data" action) now also
+  deletes this table's row for the user, alongside the tables it already covered.
+
 ## Still open / out of scope for this pass
 
 1. **Team chat pagination/real-time**: `team_messages`/`messages`/`friendships`-adjacent data are

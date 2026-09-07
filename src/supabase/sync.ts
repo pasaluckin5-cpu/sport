@@ -160,10 +160,11 @@ export async function bulkUploadStrokeLog(userId: string, entries: StrokeCountEn
 }
 
 /**
- * Deletes every row this user owns directly (profile settings, history, stroke log, results) —
- * the "delete my cloud data" action referenced in the Privacy Policy. This does not delete the
- * login itself (email/password with Supabase Auth) — that needs either a service-role-backed
- * Edge Function or a support request, neither of which exists yet (see the Privacy Policy).
+ * Deletes every row this user owns directly (profile settings, history, stroke log, medical data
+ * if sharing was ever turned on, results) — the "delete my cloud data" action referenced in the
+ * Privacy Policy. This does not delete the login itself (email/password with Supabase Auth) —
+ * that needs either a service-role-backed Edge Function or a support request, neither of which
+ * exists yet (see the Privacy Policy).
  */
 export async function deleteCloudData(userId: string): Promise<void> {
   if (!supabase) return;
@@ -171,6 +172,7 @@ export async function deleteCloudData(userId: string): Promise<void> {
     supabase.from('athlete_profiles').delete().eq('user_id', userId),
     supabase.from('completions').delete().eq('user_id', userId),
     supabase.from('stroke_log').delete().eq('user_id', userId),
+    supabase.from('medical_profiles').delete().eq('user_id', userId),
     supabase.from('results').delete().eq('athlete_id', userId),
     supabase.from('friendships').delete().eq('requester_id', userId),
     supabase.from('friendships').delete().eq('recipient_id', userId),

@@ -335,14 +335,14 @@ as **independent of `AthleteProfile`** (`MedicalProfile` in `types.ts` — its o
 `src/state/medical-context.tsx`'s `MedicalProvider`/`useMedical()`) since it's a property of the
 *person*, not of any one training program: both the main plan and the independent
 Learn-to-swim program (see below) need to read it, so `MedicalProvider` sits above both
-`PlanProvider` and `LearnToSwimProvider` in `_layout.tsx`'s provider tree. Local-only, no
-Supabase sync and no coach visibility in this pass — making health data visible to a coach
-deserves its own explicit consent step, not a silent default. `Injury.area` reuses the existing
-`PainArea` type (already used by `SessionFeedback.pain`) rather than inventing a duplicate.
-Every adjustment mirrors the "downgrade a day, don't drop it" pattern already established by the
-feedback/periodization system:
+`PlanProvider` and `LearnToSwimProvider` in `_layout.tsx`'s provider tree. Local-only *by
+default* — cloud sync exists but only as an explicit, revocable opt-in (see "Coach visibility"
+below), not a silent default. `Injury.area` reuses the existing `PainArea` type (already used by
+`SessionFeedback.pain`) rather than inventing a duplicate — `shoulder`/`knee`/`back` plus
+`wrist`/`hip`/`ankle`/`other`. Every adjustment mirrors the "downgrade a day, don't drop it"
+pattern already established by the feedback/periodization system:
 - **Conditions get condition-specific adjustments, not one flat "any condition = be careful"
-  rule** — each of the nine `MedicalCondition`s maps to its own combination of a zone cap,
+  rule** — each of the eleven `MedicalCondition`s maps to its own combination of a zone cap,
   volume cut, and (for some) an equipment or exercise exclusion, based on well-known general
   exercise-caution guidance for that condition specifically:
   - `medicalZoneCap`/`capZoneIntensity` cap the hardest pool zone the generator will schedule,
@@ -353,48 +353,55 @@ feedback/periodization system:
     intervals are fine, but repeated all-out sprints with minimal recovery — a common
     bronchospasm trigger for asthma, or the breath-holding/hyperventilation pattern of max-effort
     sprints, a possible seizure-risk factor for epilepsy — are the specific thing avoided);
-    `diabetes`, `scoliosis`, and `other` have no zone cap — diabetes's caution is about
-    volume/duration (see next point), and scoliosis's is entirely about *which gym exercises*
-    load the spine (see the exercise-exclusion point below), not swim/cardio intensity: swimming
-    itself is commonly recommended as low-impact, spine-neutral exercise for scoliosis, so
-    there's no reason to cap pool zones for it. When several conditions are flagged at once, the
-    **most restrictive** cap across all of them wins, not just the first match.
+    `diabetes`, `anemia`, `scoliosis`, `osteoporosis`, and `other` have no zone cap —
+    diabetes's/anemia's caution is about volume/duration (see next point, fatigue and reduced
+    oxygen-carrying capacity respectively), and scoliosis's/osteoporosis's are entirely about
+    *which gym exercises* load the spine/skeleton (see the exercise-exclusion point below), not
+    swim/cardio intensity: swimming itself is commonly recommended as low-impact exercise for
+    both, so there's no reason to cap pool zones for either. When several conditions are flagged
+    at once, the **most restrictive** cap across all of them wins, not just the first match.
   - `medicalVolumeMultiplier` folds into the same combined volume multiplier as periodization/
     feedback/adherence (`Math.min(1.1, Math.max(0.5, ...))`), via `CONDITION_VOLUME_MULTIPLIER` —
-    `recentSurgery` cuts hardest (0.7); `heartCondition`, `pregnancy`, and `diabetes` cut
-    next-hardest (0.85 — diabetes specifically because hypoglycemia risk rises with session
-    duration even without a hard effort, so trimming volume is the relevant caution there rather
-    than an intensity ceiling); every other condition (`highBloodPressure`, `asthma`, `epilepsy`,
-    `scoliosis`, `other`) gets a mild baseline cut (0.9) alongside whatever more specific
+    `recentSurgery` cuts hardest (0.7); `heartCondition`, `pregnancy`, `diabetes`, and `anemia`
+    cut next-hardest (0.85 — diabetes because hypoglycemia risk rises with session duration even
+    without a hard effort, anemia for the same duration-sensitive reason via reduced oxygen
+    delivery, so trimming volume is the relevant caution there rather than an intensity ceiling);
+    every other condition (`highBloodPressure`, `asthma`, `epilepsy`, `scoliosis`,
+    `osteoporosis`, `other`) gets a mild baseline cut (0.9) alongside whatever more specific
     adjustment it also gets. Each declared injury separately contributes its own severity-scaled
     cut (`INJURY_SEVERITY_MULTIPLIER`: mild 1 / moderate 0.9 / severe 0.75). Takes the
     **minimum** (most conservative) across every simultaneous signal rather than multiplying
     them together, so several flags at once don't compound into an unrealistically tiny session.
-  - `equipmentToAvoidForMedical` drops specific pool equipment for a flagged condition — `asthma`
-    drops the drag `parachute` (it adds substantial breathing resistance right when sprint sets
-    already demand the most air), `epilepsy` drops the `snorkel` (could complicate breathing/
-    rescue if a seizure happened in the water) — merged into `assemblePoolSession`'s existing
-    equipment-exclusion mechanism (`planGenerator.ts`) the same way shoulder-pain feedback
-    already drops `paddles` for the week, not a permanently lost piece of gear.
+  - `equipmentToAvoidForMedical` drops specific pool equipment for a flagged condition *or*
+    injury — `asthma` drops the drag `parachute` (added breathing resistance right when sprint
+    sets already demand the most air), `epilepsy` drops the `snorkel` (could complicate
+    breathing/rescue if a seizure happened in the water), a `wrist` injury drops `paddles` (extra
+    hand/wrist loading on the catch and pull), an `ankle` injury drops `fins` (resistance/range
+    load right at the joint) — merged into `assemblePoolSession`'s existing equipment-exclusion
+    mechanism (`planGenerator.ts`) the same way shoulder-pain feedback already drops `paddles`
+    for the week, not a permanently lost piece of gear.
   - `exercisesToAvoidForMedical` (exercise-level, not focus-level — it has to work for
     swim-dryland's phase-based exercise lists just as much as general-fitness's focus catalogs)
     takes both injuries and conditions. By injury: heavy pressing/pulling for shoulder,
-    squat/hinge/jump patterns for knee, loaded flexion/heavy hinging for back. By condition:
-    `highBloodPressure` and `pregnancy` both drop explosive/plyometric exercises (`squatJump`,
-    `medBallRotationalThrow` — the same two exercises the swim-dryland peak/taper phases add as
-    an explosive primer) since a maximal, breath-holding (Valsalva-type) effort can spike blood
-    pressure acutely, and general prenatal exercise guidance is to avoid new high-impact/
-    explosive movements; `scoliosis` drops heavy axial spinal loading and loaded-rotation
-    exercises (`squats`, `romanianDeadlift`, `russianTwists`, plus the same `squatJump`/
-    `medBallRotationalThrow` pair) — reusing the exact same general caution already applied to a
-    *back injury* above, since a spinal curvature carries the same "don't heavily load or twist
-    the spine" concern, and this is deliberately a gym-only adjustment (see the zone-cap point:
-    scoliosis never restricts swimming itself). All of these fold into the same `filterGymBlocks`
-    safety filter used for the swim-dryland leg/shoulder rules above (with the same floor: never
-    drop below 2 blocks).
+    squat/hinge/jump patterns for knee, loaded flexion/heavy hinging for back, weight-bearing
+    wrist extension for wrist, hip-flexion-under-load for hip, ankle-loading/impact patterns for
+    ankle. By condition: `highBloodPressure` and `pregnancy` both drop explosive/plyometric
+    exercises (`squatJump`, `medBallRotationalThrow` — the same two exercises the swim-dryland
+    peak/taper phases add as an explosive primer) since a maximal, breath-holding (Valsalva-type)
+    effort can spike blood pressure acutely, and general prenatal exercise guidance is to avoid
+    new high-impact/explosive movements; `osteoporosis` drops the same explosive/high-impact pair
+    (reduced bone density raises fracture risk under sudden loading); `scoliosis` drops heavy
+    axial spinal loading and loaded-rotation exercises (`squats`, `romanianDeadlift`,
+    `russianTwists`, plus the same `squatJump`/`medBallRotationalThrow` pair) — reusing the exact
+    same general caution already applied to a *back injury* above, since a spinal curvature
+    carries the same "don't heavily load or twist the spine" concern, and both scoliosis and
+    osteoporosis are deliberately gym-only adjustments (see the zone-cap point: neither restricts
+    swimming itself). All of these fold into the same `filterGymBlocks` safety filter used for
+    the swim-dryland leg/shoulder rules above (with the same floor: never drop below 2 blocks).
 - `strokesToAvoid` swaps a stroke out for freestyle when it loads an injured area with a
-  well-known mechanism — breaststroke's whip kick for a knee injury, butterfly's repetitive
-  spinal extension for a back injury.
+  well-known mechanism — breaststroke's whip kick for a knee *or hip* injury (deduplicated via a
+  `Set`, since an athlete can flag both), butterfly's repetitive spinal extension for a back
+  injury.
 - Mechanical avoidance (stroke/exercise swaps, zone cap) is **severity-independent** — any
   severity of a flagged injury triggers it immediately, erring toward caution on injury risk
   rather than waiting to confirm a trend — while volume reduction is the one severity-scaled
@@ -409,6 +416,23 @@ feedback/periodization system:
   show a short `medical.planCaution` note under the week/program summary whenever
   `hasAnyMedicalCaution(medical)` is true, alongside a `profile.section.medical` `MedicalSection`
   (injury + per-injury severity + condition `ChipGroup`s) on the Profile screen.
+- **Coach visibility (opt-in, revocable)**: `MedicalProfile.shareWithCoach` (optional, default
+  unset/false) is the explicit consent step this data was withheld from the coach system for
+  until now. `MedicalSection` shows a "Share with my coach" checkbox (only when Supabase is
+  configured at all); `src/state/medical-context.tsx` only ever calls
+  `upsertCloudMedical`/`fetchCloudMedical`/`deleteCloudMedical` (`src/supabase/medical.ts`) —
+  upserting the moment sharing is turned on or any medical data changes while it's on, and
+  **deleting** the cloud row outright the moment it's turned back off (an actual revoke, not a
+  flag flip behind an RLS check). `supabase/migrations/0004_coach_medical_visibility.sql` adds a
+  dedicated `medical_profiles` table (kept separate from `athlete_profiles` specifically so it
+  can carry its own, stricter select policy) whose RLS re-checks `share_with_coach` independently
+  as defense in depth — but the primary boundary is that the app never even writes a row without
+  consent. A linked coach sees it in `src/components/coach-dashboard.tsx`'s
+  `AthleteInsightsPanel` (a new "Medical profile" block, reusing the same
+  `feedback.pain.*`/`medical.severity.*`/`medical.condition.*` i18n keys the athlete's own
+  Profile screen uses) — or a "hasn't shared" message when the row doesn't exist. `deleteCloudData`
+  (`src/supabase/sync.ts`) was extended to also remove this row. See
+  `docs/supabase-architecture.md`'s "Coach medical visibility" section for the full RLS design.
 
 **Weekly variation & history**: nothing about a *profile* changes week to week, but
 `generateWeekPlan`'s week-key rotation (above) means the actual zone order, stroke emphasis,
