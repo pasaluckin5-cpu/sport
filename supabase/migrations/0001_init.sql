@@ -208,14 +208,26 @@ for each row execute function handle_new_user();
 -- Role-freeze: the trigger, not just an RLS check, is what actually blocks an athlete from
 -- self-promoting to coach/admin — see docs/supabase-architecture.md for why a trigger is more
 -- robust here than a self-referential `with check` on the profiles UPDATE policy.
+--
+-- The `auth.uid() is not null` guard matters: a request routed through the app (PostgREST, an
+-- anon/authenticated JWT) always has a uid, so the escalation check applies to it as intended.
+-- A query run directly in the Supabase SQL Editor (or any other direct/service-role Postgres
+-- connection) has no JWT at all, so auth.uid() is null there — without this guard, the bootstrap
+-- update this file documents below (and any later manual role change) would always fail with
+-- "Only an admin can change a user role", since there's no way to already be an admin before an
+-- admin exists. Skipping the check specifically when there's no uid doesn't weaken it: that path
+-- is only reachable with direct database access, which is already outside anything RLS or this
+-- trigger is meant to constrain.
 -- ============================================================================================
 
 create or replace function prevent_role_self_escalation()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if new.role is distinct from old.role and not exists (
-    select 1 from profiles where id = auth.uid() and role = 'admin'
-  ) then
+  if new.role is distinct from old.role
+    and auth.uid() is not null
+    and not exists (
+      select 1 from profiles where id = auth.uid() and role = 'admin'
+    ) then
     raise exception 'Only an admin can change a user role';
   end if;
   return new;
