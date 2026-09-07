@@ -37,6 +37,7 @@
       ]
     ],
     "experiments": {
+      "baseUrl": "/sport",
       "typedRoutes": true,
       "reactCompiler": true
     }
