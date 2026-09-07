@@ -39,8 +39,11 @@ const ZONE_INTENSITY_ORDER: Zone[] = ['recovery', 'technique', 'aerobicBase', 't
  *   asthma) or the breath-holding/hyperventilation pattern of max-effort sprint sets (a
  *   possible seizure-risk factor for epilepsy) are the specific thing to avoid, not moderate-
  *   hard aerobic work.
- * - `diabetes` and `other` have no zone cap — the general caution there is about session
- *   duration/monitoring (see medicalVolumeMultiplier), not an intensity ceiling.
+ * - `diabetes`, `scoliosis`, and `other` have no zone cap — diabetes's caution is about session
+ *   duration/monitoring (see medicalVolumeMultiplier), not an intensity ceiling; scoliosis's is
+ *   about which *gym* exercises load the spine (see exercisesToAvoidForMedical below), not
+ *   swim/cardio intensity — swimming itself is commonly recommended as low-impact, spine-neutral
+ *   exercise for scoliosis, so there's no reason to cap pool zones for it.
  */
 const CONDITION_ZONE_CAP: Partial<Record<MedicalCondition, Zone>> = {
   recentSurgery: 'aerobicBase',
@@ -83,9 +86,9 @@ const INJURY_SEVERITY_MULTIPLIER: Record<InjurySeverity, number> = { mild: 1, mo
  * carries hypoglycemia risk that rises with prolonged session duration even without a hard
  * effort, so cutting overall volume is the relevant general caution there rather than an
  * intensity ceiling; every other flagged condition (`highBloodPressure`, `asthma`, `epilepsy`,
- * `other`) gets the mildest general cut (0.9) — "declared something, so trim volume a bit" as a
- * baseline caution alongside whatever more specific adjustment that condition also gets
- * (zone cap, equipment/exercise avoidance — see below).
+ * `scoliosis`, `other`) gets the mildest general cut (0.9) — "declared something, so trim volume
+ * a bit" as a baseline caution alongside whatever more specific adjustment that condition also
+ * gets (zone cap, equipment/exercise avoidance — see below).
  */
 const CONDITION_VOLUME_MULTIPLIER: Record<MedicalCondition, number> = {
   recentSurgery: 0.7,
@@ -95,6 +98,7 @@ const CONDITION_VOLUME_MULTIPLIER: Record<MedicalCondition, number> = {
   highBloodPressure: 0.9,
   asthma: 0.9,
   epilepsy: 0.9,
+  scoliosis: 0.9,
   other: 0.9,
 };
 
@@ -139,17 +143,24 @@ const EXERCISES_TO_AVOID_BY_INJURY: Record<PainArea, GymExercise[]> = {
 };
 
 /**
- * Explosive/plyometric exercises to drop for a flagged condition — `highBloodPressure` because a
- * maximal, breath-holding (Valsalva-type) effort like a jump or a rotational throw can spike
- * blood pressure acutely; `pregnancy` because general prenatal exercise guidance is to avoid new
- * high-impact/explosive movements. Both point at the same two exercises (also the ones the
- * swim-dryland peak/taper phases add as an explosive primer — see SWIM_SC_PROGRAM in
- * workoutLibrary.ts), so this reuses `filterGymBlocks`'s floor-of-2 safety net exactly like the
- * per-injury exclusions above.
+ * Gym exercises to drop for a flagged condition — targeted at whatever that condition's own
+ * loading concern actually is, not a single shared list:
+ * - `highBloodPressure` and `pregnancy` both drop explosive/plyometric work (a maximal,
+ *   breath-holding/Valsalva-type effort like a jump or a rotational throw can spike blood
+ *   pressure acutely; general prenatal guidance is to avoid new high-impact/explosive movements).
+ * - `scoliosis` drops heavy axial spinal loading and loaded-rotation exercises — the same general
+ *   caution already applied to a *back injury* (see EXERCISES_TO_AVOID_BY_INJURY above), since a
+ *   spinal curvature carries the same "don't heavily load or twist the spine" concern; this is
+ *   specifically a gym-side adjustment (see medicalZoneCap's doc comment — swimming itself isn't
+ *   restricted for scoliosis).
+ * The jump/throw exercises are also the ones the swim-dryland peak/taper phases add as an
+ * explosive primer (see SWIM_SC_PROGRAM in workoutLibrary.ts), so all of these reuse
+ * `filterGymBlocks`'s floor-of-2 safety net exactly like the per-injury exclusions above.
  */
 const EXERCISES_TO_AVOID_BY_CONDITION: Partial<Record<MedicalCondition, GymExercise[]>> = {
   highBloodPressure: ['squatJump', 'medBallRotationalThrow'],
   pregnancy: ['squatJump', 'medBallRotationalThrow'],
+  scoliosis: ['squats', 'romanianDeadlift', 'russianTwists', 'squatJump', 'medBallRotationalThrow'],
 };
 
 export function exercisesToAvoidForMedical(medical: MedicalProfile | undefined): GymExercise[] {

@@ -230,6 +230,7 @@ export type MedicalCondition =
   | 'diabetes'
   | 'highBloodPressure'
   | 'epilepsy'
+  | 'scoliosis'
   | 'recentSurgery'
   | 'other';
 

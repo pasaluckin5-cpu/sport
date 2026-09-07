@@ -17,6 +17,7 @@ const CONDITIONS: MedicalCondition[] = [
   'diabetes',
   'highBloodPressure',
   'epilepsy',
+  'scoliosis',
   'recentSurgery',
   'other',
 ];

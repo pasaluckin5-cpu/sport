@@ -226,6 +226,7 @@ export default {
       diabetes: 'Диабет',
       highBloodPressure: 'Высокое давление',
       epilepsy: 'Эпилепсия',
+      scoliosis: 'Сколиоз',
       recentSurgery: 'Недавняя операция',
       other: 'Другое',
     },

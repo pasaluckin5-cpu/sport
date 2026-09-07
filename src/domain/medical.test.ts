@@ -59,6 +59,10 @@ describe('medicalZoneCap', () => {
     expect(medicalZoneCap({ injuries: [], conditions: ['other'] })).toBeUndefined();
   });
 
+  it('has no zone cap for scoliosis (its caution is about gym exercise selection, not swim intensity)', () => {
+    expect(medicalZoneCap({ injuries: [], conditions: ['scoliosis'] })).toBeUndefined();
+  });
+
   it('recent surgery takes priority over a milder cap when both are present', () => {
     expect(medicalZoneCap({ injuries: [], conditions: ['recentSurgery', 'heartCondition'] })).toBe('aerobicBase');
   });
@@ -188,6 +192,11 @@ describe('exercisesToAvoidForMedical', () => {
     expect(bp).toEqual(expect.arrayContaining(['squatJump', 'medBallRotationalThrow']));
     const pregnancy = exercisesToAvoidForMedical({ injuries: [], conditions: ['pregnancy'] });
     expect(pregnancy).toEqual(expect.arrayContaining(['squatJump', 'medBallRotationalThrow']));
+  });
+
+  it('lists heavy axial-loading/spinal-rotation exercises for scoliosis, same caution as a back injury', () => {
+    const scoliosis = exercisesToAvoidForMedical({ injuries: [], conditions: ['scoliosis'] });
+    expect(scoliosis).toEqual(expect.arrayContaining(['squats', 'romanianDeadlift', 'russianTwists']));
   });
 
   it('has no exercise exclusions for conditions without a specific list (asthma, diabetes, etc.)', () => {

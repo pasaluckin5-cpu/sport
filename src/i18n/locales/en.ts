@@ -216,6 +216,7 @@ export default {
       diabetes: 'Diabetes',
       highBloodPressure: 'High blood pressure',
       epilepsy: 'Epilepsy',
+      scoliosis: 'Scoliosis',
       recentSurgery: 'Recent surgery',
       other: 'Other',
     },

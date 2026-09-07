@@ -505,6 +505,36 @@ describe('medical adjustments', () => {
     }
   });
 
+  it('excludes heavy axial-loading/spinal-rotation exercises for scoliosis, in both gym modes, without capping pool zone', () => {
+    const AVOIDED = ['squats', 'romanianDeadlift', 'russianTwists', 'squatJump', 'medBallRotationalThrow'];
+    const swimProfile = withProfile({ poolSessionsPerWeek: 7, gymSessionsPerWeek: 3, goal: 'speed' });
+    const swimPlan = generateWeekPlan(swimProfile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [], conditions: ['scoliosis'] },
+    });
+    const neutralSwimPlan = generateWeekPlan(swimProfile, { weekKey: '2026-W10' });
+    // Scoliosis doesn't cap pool intensity — swimming itself isn't restricted.
+    expect(swimPlan.days.map((d) => d.pool?.zone)).toEqual(neutralSwimPlan.days.map((d) => d.pool?.zone));
+    for (const day of swimPlan.days) {
+      if (!day.gym) continue;
+      for (const block of day.gym.blocks) {
+        expect(AVOIDED).not.toContain(block.exercise);
+      }
+    }
+
+    const gymOnlyProfile = withProfile({ poolSessionsPerWeek: 0, gymSessionsPerWeek: 3 });
+    const gymOnlyPlan = generateWeekPlan(gymOnlyProfile, {
+      weekKey: '2026-W10',
+      medical: { injuries: [], conditions: ['scoliosis'] },
+    });
+    for (const day of gymOnlyPlan.days) {
+      if (!day.gym) continue;
+      for (const block of day.gym.blocks) {
+        expect(AVOIDED).not.toContain(block.exercise);
+      }
+    }
+  });
+
   it('caps pool zone intensity and drops explosive gym exercises for pregnancy', () => {
     const profile = withProfile({ poolSessionsPerWeek: 3, gymSessionsPerWeek: 3, goal: 'speed' });
     const plan = generateWeekPlan(profile, {
