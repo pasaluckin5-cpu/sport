@@ -721,10 +721,10 @@ asset's shape changes.
 ## Store submission (EAS)
 
 `eas.json` has `development`/`preview`/`production` build profiles, and `app.json`'s
-`ios.bundleIdentifier`/`android.package` are set to a placeholder (`com.swimplanner.app`) —
-see the "Publishing" section in `README.md` for the full account-setup and build/submit steps,
-none of which can be done from here since they need the user's own Apple/Google/Expo
-credentials. `docs/privacy-policy.html` (standalone, bilingual) and `docs/store-listing.md`
+`ios.bundleIdentifier`/`android.package` are `com.swimflow.swimplanner` (reverse-DNS under the
+`swimflow.com` domain chosen for this app) — see the "Publishing" section in `README.md` for the
+full account-setup and build/submit steps, none of which can be done from here since they need
+the user's own Apple/Google/Expo credentials. `docs/privacy-policy.html` (standalone, bilingual) and `docs/store-listing.md`
 (draft App Store/Play copy in English and Russian, plus `docs/screenshots/`) exist so those are
 ready to go once there's a build to submit; both are referenced from README's Publishing
 section.

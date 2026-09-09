@@ -82,9 +82,9 @@ This repo has everything that can be set up without your own accounts; the rest 
 credentials only you can provide:
 
 1. **Pick real bundle identifiers.** `app.json`'s `ios.bundleIdentifier` and `android.package`
-   are currently placeholders (`com.swimplanner.app`) — change them to something under a domain
-   you control (reverse-DNS, e.g. `com.yourname.swimplanner`) before your first build. They
-   must be globally unique and, once published, are very hard to change.
+   are set to `com.swimflow.swimplanner` (reverse-DNS under the `swimflow.com` domain) — change
+   this before your first build if you're publishing under a different domain/name. They must be
+   globally unique and, once published, are very hard to change.
 2. **Accounts you'll need:**
    - A free [Expo account](https://expo.dev/signup), to run builds via EAS.
    - An [Apple Developer Program](https://developer.apple.com/programs/) membership
