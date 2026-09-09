@@ -8,11 +8,11 @@
     "scheme": "swimplanner",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.swimplanner.app",
+      "bundleIdentifier": "com.swimflow.swimplanner",
       "supportsTablet": true
     },
     "android": {
-      "package": "com.swimplanner.app",
+      "package": "com.swimflow.swimplanner",
       "adaptiveIcon": {
         "backgroundColor": "#063B7A",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
