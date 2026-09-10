@@ -78,40 +78,23 @@ See `CLAUDE.md` for architecture notes and other commands (lint, test, typecheck
 ## Publishing to the App Store / Google Play
 
 Builds are configured with [EAS Build](https://docs.expo.dev/build/introduction/) (`eas.json`).
-This repo has everything that can be set up without your own accounts; the rest needs
-credentials only you can provide:
+This repo has everything that can be set up without your own accounts (bundle ID, icons, privacy
+policy, store listing copy) — the rest needs credentials only you can provide.
 
-1. **Pick real bundle identifiers.** `app.json`'s `ios.bundleIdentifier` and `android.package`
-   are set to `com.swimflow.swimplanner` (reverse-DNS under the `swimflow.com` domain) — change
-   this before your first build if you're publishing under a different domain/name. They must be
-   globally unique and, once published, are very hard to change.
-2. **Accounts you'll need:**
-   - A free [Expo account](https://expo.dev/signup), to run builds via EAS.
-   - An [Apple Developer Program](https://developer.apple.com/programs/) membership
-     ($99/year) to submit to the App Store.
-   - A [Google Play Console](https://play.google.com/console/signup) account ($25 one-time) to
-     submit to Google Play.
-3. **Log in and link the project** (one-time):
-   ```
-   npx eas-cli login
-   npx eas-cli build:configure
-   ```
-   This adds an `extra.eas.projectId` to `app.json` tied to your Expo account.
-4. **Build:**
-   ```
-   npx eas-cli build --platform ios --profile production
-   npx eas-cli build --platform android --profile production
-   ```
-   The first iOS build will walk you through Apple credentials (or generate them for you); the
-   first Android build generates a signing keystore that EAS stores for you.
-5. **Submit:**
-   ```
-   npx eas-cli submit --platform ios
-   npx eas-cli submit --platform android
-   ```
-   iOS submission needs an App Store Connect app record created first (in App Store Connect,
-   or via `eas submit`'s prompts). Android submission needs a Google Play service account key
-   — see [EAS's Android submission docs](https://docs.expo.dev/submit/android/).
+**For a complete, self-contained, start-to-finish walkthrough (Node.js install, EAS CLI, Apple
+Developer/App Store Connect setup, build, submit, filling in the listing) see
+[`docs/app-store-publishing-guide.md`](docs/app-store-publishing-guide.md)** — written so you can
+follow it on your own, without any AI assistant, once you have the accounts below.
+
+Accounts you'll need:
+- A free [Expo account](https://expo.dev/signup), to run builds via EAS.
+- An [Apple Developer Program](https://developer.apple.com/programs/) membership ($99/year) to
+  submit to the App Store.
+- (Only if also publishing to Android) A
+  [Google Play Console](https://play.google.com/console/signup) account ($25 one-time) — the
+  Android build/submit commands are the same shape as iOS's, just `--platform android`; see
+  [EAS's Android submission docs](https://docs.expo.dev/submit/android/) for the Play-specific
+  service account key it needs.
 
 `eas.json` also has a `development` profile (installs a dev client for local native debugging)
 and a `preview` profile (an internal-distribution build you can share without going through a
