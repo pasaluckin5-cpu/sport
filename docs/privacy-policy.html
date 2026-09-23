@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Swim Planner — Privacy Policy</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+    line-height: 1.6;
+    color: #1a1a1a;
+    background: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e8e8e8; background: #0f1115; }
+    a { color: #6db4ff; }
+  }
+  h1 { font-size: 1.6rem; margin-top: 2.5rem; }
+  h1:first-of-type { margin-top: 0; }
+  .updated { opacity: 0.65; font-size: 0.9rem; }
+  .lang-switch { margin: 1rem 0 2rem; font-size: 0.95rem; }
+  .lang-switch a { margin-right: 1rem; }
+  section[lang="ru"] { display: none; }
+  body.show-ru section[lang="en"] { display: none; }
+  body.show-ru section[lang="ru"] { display: block; }
+</style>
+</head>
+<body>
+  <p class="lang-switch">
+    <a href="#" onclick="document.body.classList.remove('show-ru'); return false;">English</a>
+    <a href="#" onclick="document.body.classList.add('show-ru'); return false;">Русский</a>
+  </p>
+
+  <section lang="en">
+    <h1>Swim Planner — Privacy Policy</h1>
+    <p class="updated">Last updated: 2026</p>
+    <p><strong>An account is optional.</strong> Swim Planner works fully offline with no account
+      at all: your level, goal, schedule, equipment, time trials, completed-session history, and
+      stroke-count log are stored only in this app's local storage on your device, nothing is
+      transmitted anywhere, and this is still the default the app starts in.</p>
+    <p><strong>If you choose to create an account</strong> (Profile → Account), that same data —
+      your profile settings, completed-session history, stroke-count log, and any results you or
+      a coach log — is instead stored in a cloud database (Supabase, hosted on Amazon Web
+      Services/Google Cloud infrastructure depending on the project region) so it can sync across
+      your devices. Your email address and password are handled by Supabase's authentication
+      service; we never see or store your password ourselves. You can keep using the app without
+      ever creating an account — nothing about account creation is required for the core plan
+      generator to work.</p>
+    <p><strong>If you join a coach's team</strong> (by accepting an invite), that coach can see
+      your profile settings, completed-session history, stroke-count log, and logged results —
+      so they can plan your training — and can send you messages (both one-to-one and in the
+      team's group chat) and assign you workouts. A coach cannot see any other athlete's data
+      unless that athlete is also on one of the coach's teams. Leaving a team (or never joining
+      one) means no coach can see any of your data. An administrator role exists for account
+      support and moderation but is not assigned to anyone by default.</p>
+    <p><strong>Your self-declared medical profile</strong> (injuries and conditions, if you choose
+      to log any in Profile) is the one exception to all of the above: it stays local-only and is
+      never uploaded to the cloud, even with an account, unless you explicitly turn on "Share with
+      my coach" in that same section. Turning it on shares it only with a coach whose team you're
+      actively on at the time; turning it back off deletes it from the cloud immediately, revoking
+      that coach's access. No one else — not a friend, not another coach — can ever see it.</p>
+    <p><strong>If you add a friend</strong> (by email, once they accept), what a friend can see is
+      narrower than a coach: your logged results, your basic profile (email and, if set, gender —
+      used to compare a result against the same classification standards shown elsewhere in the
+      app), and your training-plan settings (level, goal, schedule, equipment) so they can preview
+      what your weekly plan looks like. A friend never sees your completed-session history, logged
+      feedback, stroke-count log, or medical profile. Removing a friend (either side can)
+      immediately stops that access.</p>
+    <p>Nothing you enter is sold or shared with any third party beyond Supabase acting as our
+      database/authentication provider to run the app; we don't run analytics or ads.</p>
+    <p>You can see everything stored locally via the app's own Profile screen, copy it out
+      (Backup &amp; restore) or delete it at any time by clearing the app's storage in your
+      device settings or uninstalling the app. If you have an account, you can delete your
+      cloud-stored profile/history/stroke-log/medical/results data from the Account section in
+      Profile;
+      deleting the underlying login itself (email/password) currently requires contacting the
+      developer, since a fully self-service account-deletion flow hasn't shipped yet — this
+      policy will be updated when it does.</p>
+  </section>
+
+  <section lang="ru">
+    <h1>Swim Planner — Политика конфиденциальности</h1>
+    <p class="updated">Обновлено: 2026</p>
+    <p><strong>Аккаунт не обязателен.</strong> Swim Planner полностью работает офлайн без
+      какого-либо аккаунта: ваш уровень, цель, расписание, инвентарь, контрольные заплывы,
+      история выполненных тренировок и журнал количества гребков хранятся только в локальном
+      хранилище приложения на вашем устройстве, ничего никуда не передаётся, и это по-прежнему
+      режим по умолчанию.</p>
+    <p><strong>Если вы создаёте аккаунт</strong> (Профиль → Аккаунт), те же данные — настройки
+      профиля, история выполненных тренировок, журнал гребков и любые результаты, добавленные
+      вами или тренером — вместо этого хранятся в облачной базе данных (Supabase, размещённой на
+      инфраструктуре Amazon Web Services/Google Cloud в зависимости от региона проекта), чтобы
+      синхронизироваться между вашими устройствами. Email и пароль обрабатываются сервисом
+      аутентификации Supabase — мы сами не видим и не храним ваш пароль. Приложением можно
+      пользоваться без создания аккаунта — генератор плана тренировок не требует аккаунта.</p>
+    <p><strong>Если вы присоединяетесь к команде тренера</strong> (приняв приглашение), этот
+      тренер может видеть настройки вашего профиля, историю выполненных тренировок, журнал
+      гребков и добавленные результаты — чтобы планировать ваши тренировки — а также может
+      отправлять вам сообщения (лично и в общем чате команды) и назначать тренировки. Тренер не
+      может видеть данные другого спортсмена, если тот не состоит в одной из его команд. Если вы
+      не состоите в команде (или покинули её), ни один тренер не видит ваши данные. Роль
+      администратора существует для поддержки и модерации, но по умолчанию никому не назначена.</p>
+    <p><strong>Ваш медицинский профиль</strong> (травмы и состояния здоровья, если вы решите
+      указать их в разделе «Профиль») — единственное исключение из всего вышесказанного: он
+      остаётся только локальным и никогда не загружается в облако, даже с аккаунтом, если вы явно
+      не включите «Поделиться с тренером» в том же разделе. Включение делится им только с
+      тренером, в чьей команде вы состоите на данный момент; отключение немедленно удаляет его из
+      облака, лишая этого тренера доступа. Никто другой — ни друг, ни другой тренер — никогда не
+      сможет его увидеть.</p>
+    <p><strong>Если вы добавляете друга</strong> (по email, после того как он примет заявку), то,
+      что видит друг, уже, чем у тренера: ваши добавленные результаты, базовый профиль (email и,
+      если указан, пол — используется для сравнения результата с теми же разрядными нормативами,
+      что показаны в остальном приложении) и настройки вашего плана тренировок (уровень, цель,
+      расписание, инвентарь), чтобы он мог посмотреть, как выглядит ваш план на неделю. Друг
+      никогда не видит историю выполненных тренировок, записанную обратную связь, журнал гребков
+      или медицинский профиль. Удаление из друзей (может сделать любая из сторон) сразу
+      прекращает этот доступ.</p>
+    <p>Ничего из введённого не продаётся и не передаётся третьим лицам, кроме Supabase как
+      поставщика базы данных и аутентификации, необходимого для работы приложения; рекламы и
+      аналитики в приложении нет.</p>
+    <p>Все данные, хранящиеся локально, видны на экране профиля приложения, их можно скопировать
+      (раздел «Резервная копия») или удалить в любой момент, очистив хранилище приложения в
+      настройках устройства или удалив приложение. Если у вас есть аккаунт, вы можете удалить
+      свои облачные данные (профиль/историю/журнал гребков/медицинский профиль/результаты) в
+      разделе «Аккаунт» на
+      экране профиля; удаление самого логина (email/пароль) пока требует обращения к
+      разработчику, так как полностью самостоятельное удаление аккаунта ещё не реализовано — эта
+      политика будет обновлена, когда это появится.</p>
+  </section>
+</body>
+</html>
