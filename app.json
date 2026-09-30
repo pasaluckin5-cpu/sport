@@ -1,7 +1,12 @@
 {
   "expo": {
+<<<<<<< HEAD
     "name": "SwimPlanner",
     "slug": "swimplanner",
+=======
+    "name": "Swim Planner",
+    "slug": "swim-training-planner",
+>>>>>>> e2d6825403648f934001a533d8276da54a984f58
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,25 +14,40 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.swimflow.swimplanner",
+<<<<<<< HEAD
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSBluetoothAlwaysUsageDescription": "Приложению требуется доступ к Bluetooth для подключения к устройствам."
       }
+=======
+      "supportsTablet": true
+>>>>>>> e2d6825403648f934001a533d8276da54a984f58
     },
     "android": {
       "package": "com.swimflow.swimplanner",
       "adaptiveIcon": {
         "backgroundColor": "#063B7A",
+<<<<<<< HEAD
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       }
     },
     "web": {
       "bundler": "metro",
+=======
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+>>>>>>> e2d6825403648f934001a533d8276da54a984f58
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+<<<<<<< HEAD
       "expo-router"
     ],
     "experiments": {
@@ -38,6 +58,22 @@
       "eas": {
         "projectId": "11b6d7e0-0bc9-4c9c-ae20-9458dba8a25e"
       }
+=======
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#208AEF",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 160
+        }
+      ]
+    ],
+    "experiments": {
+      "baseUrl": "/sport",
+      "typedRoutes": true,
+      "reactCompiler": true
+>>>>>>> e2d6825403648f934001a533d8276da54a984f58
     }
   }
 }
