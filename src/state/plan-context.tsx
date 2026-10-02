@@ -18,6 +18,39 @@ interface PlanContextValue {
 
 const PlanContext = createContext<PlanContextValue | null>(null);
 
+/**
+ * Функция адаптации плана: собирает контекст прошлой недели, 
+ * проверяет медицинские ограничения (травмы/болезни) и формирует детальные вводные 
+ * для генератора или расшифровки тренировок.
+ */
+function buildAdaptivePlanContext(
+  feedbackHistory: any[],
+  weekCounts: any,
+  medical: any
+) {
+  // 1. Анализ самочувствия и обратной связи с прошлой недели
+  const lastFeedbacks = feedbackHistory.slice(-7); // Берем последние дни
+  const hasFatigue = lastFeedbacks.some((f) => f.fatigueLevel && f.fatigueLevel > 4);
+  
+  // 2. Проверка медицинских ограничений / травм
+  const activeInjuries = medical?.injuries?.filter((inj: any) => inj.active) || [];
+  const hasMedicalRestrictions = activeInjuries.length > 0 || medical?.isSick;
+
+  // 3. Формирование модификаторов для генератора
+  return {
+    feedbackHistory,
+    recentWeekCounts: weekCounts,
+    medical,
+    adaptationFlags: {
+      hasFatigue,
+      hasMedicalRestrictions,
+      activeInjuriesCount: activeInjuries.length,
+      // Можно передать флаг снижения интенсивности, если есть травмы или сильная усталость
+      shouldReduceIntensity: hasFatigue || hasMedicalRestrictions,
+    },
+  };
+}
+
 export function PlanProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<AthleteProfile | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -38,11 +71,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // On sign-in: cloud is the source of truth if it already has a profile (e.g. a returning
-  // user on a new device); otherwise this is a first sign-in, so the local profile — if any —
-  // is uploaded once as a one-time migration. Signing out changes nothing here: whatever is
-  // currently loaded stays in state and in the local AsyncStorage cache, so the app keeps
-  // working exactly as it does today with no account at all.
+  // Синхронизация с облаком Supabase при входе
   useEffect(() => {
     if (!session || !isReady) return;
     let cancelled = false;
@@ -58,14 +87,20 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-    // Only re-run when the signed-in user changes, not on every local profile edit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user.id, isReady]);
 
-  const weekPlan = useMemo(
-    () => (profile ? generateWeekPlan(profile, { feedbackHistory, recentWeekCounts: weekCounts, medical }) : null),
-    [profile, feedbackHistory, weekCounts, medical],
-  );
+  // Генерация недели с использованием функции адаптации контекста
+  const weekPlan = useMemo(() => {
+    if (!profile) return null;
+
+    const adaptiveContext = buildAdaptivePlanContext(
+      feedbackHistory, 
+      weekCounts, 
+      medical
+    );
+
+    return generateWeekPlan(profile, adaptiveContext);
+  }, [profile, feedbackHistory, weekCounts, medical]);
 
   const value = useMemo<PlanContextValue>(
     () => ({
@@ -73,9 +108,16 @@ export function PlanProvider({ children }: { children: ReactNode }) {
       weekPlan,
       isReady,
       updateProfile: async (next: AthleteProfile) => {
-        await saveProfile(next);
-        setProfile(next);
-        if (session) await upsertCloudProfile(session.user.id, next);
+        try {
+          await saveProfile(next);
+          setProfile(next);
+          if (session) {
+            await upsertCloudProfile(session.user.id, next);
+          }
+        } catch (error) {
+          console.error('Failed to update profile:', error);
+          throw error;
+        }
       },
     }),
     [profile, weekPlan, isReady, session],

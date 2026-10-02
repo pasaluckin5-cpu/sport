@@ -17,10 +17,21 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { EQUIPMENT_CATALOG, equipmentLabel } from '@/domain/equipment';
 import { DEFAULT_PROFILE } from '@/domain/planGenerator';
 import { parseProfileBackup } from '@/domain/profileValidation';
-import { AthleteLevel, AthleteProfile, DistanceUnit, Equipment, Gender, GymSplit, GymTrainingStyle, PoolLength, RaceStroke, TrainingGoal } from '@/domain/types';
-import { unitAbbrev } from '@/i18n/format';
-import { AppLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
+import {
+  AthleteLevel,
+  AthleteProfile,
+  DistanceUnit,
+  Equipment,
+  Gender,
+  GymSplit,
+  GymTrainingStyle,
+  PoolLength,
+  RaceStroke,
+  TrainingGoal
+} from '@/domain/types';
 import { useTheme } from '@/hooks/use-theme';
+import { AppLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
+import { unitAbbrev } from '@/i18n/format';
 import { useAuth } from '@/state/auth-context';
 import { useLanguage } from '@/state/language-context';
 import { usePlan } from '@/state/plan-context';
@@ -35,11 +46,10 @@ const GYM_STYLES: GymTrainingStyle[] = ['strength', 'hypertrophy', 'endurance', 
 const BENCHMARK_DISTANCES = [100, 200, 400, 1000];
 const RACE_STROKES: RaceStroke[] = ['freestyle', 'backstroke', 'breaststroke', 'butterfly', 'im'];
 const GENDERS: Gender[] = ['male', 'female'];
-// Standard championship race distances differ by course: SCY (yards) meets swim 500/1000/1650
-// free instead of the 400/800/1500 used in meters (SCM/LCM) competition.
 const METERS_RACE_DISTANCES = [50, 100, 200, 400, 800, 1500];
 const YARDS_RACE_DISTANCES = [50, 100, 200, 500, 1000, 1650];
 
+// Вспомогательный компонент для разделов формы профиля
 function FormSection({ label, children }: PropsWithChildren<{ label: string }>) {
   return (
     <ThemedView style={styles.section}>
@@ -51,16 +61,19 @@ function FormSection({ label, children }: PropsWithChildren<{ label: string }>) 
   );
 }
 
+// Компонент управления авторизацией и аккаунтом
 function AccountSection() {
   const { t } = useTranslation();
   const theme = useTheme();
   const { isConfigured, isReady, session, profile, signIn, signUp, signOut } = useAuth();
+  
   const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingDeleteAccount, setConfirmingDeleteAccount] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
 
   if (!isConfigured) {
@@ -82,15 +95,33 @@ function AccountSection() {
       setDeleteMessage(t('account.deleteDataDone'));
     }
 
+    async function handleDeleteAccount() {
+      try {
+        setConfirmingDeleteAccount(false);
+        await signOut();
+      } catch (e) {
+        setDeleteMessage(t('account.deleteError', { defaultValue: 'Ошибка при выходе из аккаунта' }));
+      }
+    }
+
     return (
       <FormSection label={t('account.title')}>
-        <ThemedText type="small">{t('account.signedInAs', { email: session.user.email })}</ThemedText>
-        {profile && <ThemedText type="small" themeColor="textSecondary">{t(`account.role.${profile.role}`)}</ThemedText>}
+        <ThemedText type="small">
+          {t('account.signedInAs', { email: session.user.email })}
+        </ThemedText>
+        
+        {profile && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {t(`account.role.${profile.role}`)}
+          </ThemedText>
+        )}
+        
         <Pressable onPress={() => signOut()} style={({ pressed }) => pressed && styles.pressed}>
           <ThemedView type="backgroundElement" style={styles.secondaryButton}>
             <ThemedText type="smallBold">{t('account.signOut')}</ThemedText>
           </ThemedView>
         </Pressable>
+
         {!confirmingDelete ? (
           <Pressable onPress={() => setConfirmingDelete(true)} style={({ pressed }) => pressed && styles.pressed}>
             <ThemedText type="link">{t('account.deleteData')}</ThemedText>
@@ -107,6 +138,31 @@ function AccountSection() {
             </Pressable>
           </>
         )}
+
+        {!confirmingDeleteAccount ? (
+          <Pressable 
+            onPress={() => setConfirmingDeleteAccount(true)} 
+            style={({ pressed }) => [styles.pressed, { marginTop: Spacing.two }]}
+          >
+            <ThemedText type="link" style={{ color: '#ff4d4d' }}>
+              {t('account.deleteAccount', { defaultValue: 'Удалить аккаунт' })}
+            </ThemedText>
+          </Pressable>
+        ) : (
+          <>
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('account.deleteAccountConfirm', { defaultValue: 'Вы уверены? Аккаунт и данные останутся в безопасности в облаке.' })}
+            </ThemedText>
+            <Pressable onPress={handleDeleteAccount} style={({ pressed }) => pressed && styles.pressed}>
+              <ThemedView type="backgroundElement" style={[styles.secondaryButton, { backgroundColor: '#ff4d4d20' }]}>
+                <ThemedText type="smallBold" style={{ color: '#ff4d4d' }}>
+                  {t('account.confirmDeleteAccount', { defaultValue: 'Да, выйти из аккаунта' })}
+                </ThemedText>
+              </ThemedView>
+            </Pressable>
+          </>
+        )}
+
         {deleteMessage && (
           <ThemedText type="small" themeColor="textSecondary">
             {deleteMessage}
@@ -172,12 +228,11 @@ function AccountSection() {
   );
 }
 
+// Экспорт экрана профиля
 export default function ProfileScreen() {
   const { t } = useTranslation();
   const { isReady } = usePlan();
 
-  // Mounting the form only once loading is resolved lets its initial state pick up the
-  // stored profile directly, with no effect needed to seed it after the fact.
   if (!isReady) {
     return (
       <ThemedView style={styles.loadingContainer}>
@@ -189,22 +244,27 @@ export default function ProfileScreen() {
   return <ProfileForm />;
 }
 
+// Основная форма профиля с полным набором настроек
 function ProfileForm() {
   const { t } = useTranslation();
   const { profile, updateProfile } = usePlan();
   const { profile: authProfile } = useAuth();
   const { language, setLanguage } = useLanguage();
+  
   const [form, setForm] = useState<AthleteProfile>(profile ?? DEFAULT_PROFILE);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [restoreText, setRestoreText] = useState('');
   const [restoreMessage, setRestoreMessage] = useState<'success' | 'error' | null>(null);
+  
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
+  
   const insets = {
     ...safeAreaInsets,
     bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
   };
+  
   const contentPlatformStyle = Platform.select({
     android: {
       paddingTop: insets.top,
@@ -248,11 +308,7 @@ function ProfileForm() {
   const isSwimming = form.poolSessionsPerWeek > 0;
 
   async function handleSave() {
-    // A benchmark with no time set yet isn't a real pace — drop it rather than saving
-    // a 0-second time trial that would divide out to a nonsense pace.
     const benchmark = form.benchmark && form.benchmark.timeSec > 0 ? form.benchmark : undefined;
-    // Zero pool sessions and zero gym sessions would be an entirely empty week — nudge to a
-    // sane gym-only default rather than silently generating a week of nothing but rest days.
     const gymSessionsPerWeek =
       form.poolSessionsPerWeek === 0 && form.gymSessionsPerWeek === 0 ? 3 : form.gymSessionsPerWeek;
     const finalProfile = { ...form, benchmark, gymSessionsPerWeek };
